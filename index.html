@@ -1,0 +1,2607 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Manada Patitas">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#059669">
+  <meta name="description" content="Sistema de gestión veterinaria a domicilio - Manada Patitas">
+  
+<title>Manada Patitas - Sistema Veterinario</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/jpeg" href="favicon.jpg">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+   
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body {
+      overscroll-behavior: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
+    .animate-slideUp { animation: slideUp 0.3s ease-out; }
+    input, textarea, select { font-size: 16px !important; }
+    
+    /* Estilo para el botón de instalación */
+    #installButton {
+      position: fixed;
+      bottom: 80px;
+      right: 16px;
+      z-index: 1000;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Botón flotante de instalación -->
+  <button id="installButton" class="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-3 rounded-full shadow-2xl font-bold flex items-center gap-2 animate-pulse">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Instalar App
+  </button>
+
+  <div id="root"></div>
+
+  <!-- PWA Installation Script -->
+  <script>
+    // Intentar registrar Service Worker solo si estamos en un servidor
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then((registration) => {
+            console.log('Service Worker registrado:', registration.scope);
+          })
+          .catch((error) => {
+            console.log('Service Worker no disponible:', error);
+          });
+      });
+    }
+
+    const installButton = document.getElementById('installButton');
+    let deferredPrompt;
+    let installShown = false;
+
+    // Prompt de instalación
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installButton.style.display = 'flex';
+      installShown = true;
+    });
+
+    installButton.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`Instalación: ${outcome}`);
+        deferredPrompt = null;
+        installButton.style.display = 'none';
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      console.log('PWA instalada');
+      installButton.style.display = 'none';
+    });
+
+    // Si después de 3 segundos no aparece el prompt, mostrar instrucciones
+    setTimeout(() => {
+      if (!installShown && installButton) {
+        // Cambiar el botón para mostrar instrucciones manuales
+        installButton.innerHTML = `
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+          ¿Cómo instalar?
+        `;
+        installButton.style.display = 'flex';
+        installButton.style.background = 'linear-gradient(to right, #2563eb, #3b82f6)';
+        
+        installButton.onclick = () => {
+          alert('📱 CÓMO INSTALAR LA APP:\n\n' +
+                '1. Toca el menú (⋮) arriba a la derecha\n' +
+                '2. Busca "Instalar app" o "Añadir a pantalla de inicio"\n' +
+                '3. Confirma\n' +
+                '4. ¡Listo! Tendrás el icono 🐾 en tu pantalla\n\n' +
+                '💡 TRUCO: También puedes buscar el icono de casita con ➕ en la barra de direcciones');
+        };
+      }
+    }, 3000);
+  </script>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    /* ===========================
+       Iconos SVG (se agrega WhatsApp)
+       =========================== */
+    const Icon = ({ name, size = 24, className = "" }) => {
+      const icons = {
+        home: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+        ),
+        users: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        ),
+        calendar: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        ),
+        fileText: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        ),
+        search: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+        ),
+        plus: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        ),
+        x: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        ),
+        chevronRight: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        ),
+        pill: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M10.5 20.5 10 21a2 2 0 0 1-2.828 0L4.343 18.172a2 2 0 0 1 0-2.828l.5-.5"/>
+            <path d="m15 15-6-6"/>
+            <path d="M14.5 4.5 14 4a2 2 0 0 0-2.828 0L8.343 6.828a2 2 0 0 0 0 2.828l.5.5"/>
+            <path d="m20 9-6-6"/>
+          </svg>
+        ),
+        activity: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        ),
+        trendingUp: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+            <polyline points="17 6 23 6 23 12"/>
+          </svg>
+        ),
+        shoppingBag: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 0 1-8 0"/>
+          </svg>
+        ),
+        /* NUEVO: Ícono de WhatsApp embebido */
+        whatsapp: (
+          <svg width={size} height={size} viewBox="0 0 32 32" fill="currentColor"
+               className={className} aria-hidden="true" focusable="false">
+            <path d="M16 .5C7.44.5.5 7.44.5 16c0 2.81.74 5.54 2.16 7.96L.5 31.5l7.76-2.06A15.43 15.43 0 0 0 16 31.5C24.56 31.5 31.5 24.56 31.5 16S24.56.5 16 .5zm0 28c-2.62 0-5.18-.72-7.39-2.08l-.53-.32-4.61 1.22 1.24-4.49-.35-.57A12.88 12.88 0 1 1 16 28.5zm7.09-9.33c-.39-.2-2.31-1.14-2.67-1.27-.36-.13-.62-.2-.88.2-.27.39-1.02 1.27-1.25 1.53-.23.26-.46.29-.85.1-.39-.2-1.64-.6-3.12-1.92-1.15-1.02-1.93-2.27-2.16-2.65-.23-.39-.02-.6.17-.79.17-.17.39-.46.59-.69.2-.23.26-.39.39-.65.13-.26.07-.49-.03-.69-.1-.2-.88-2.12-1.2-2.91-.32-.78-.65-.67-.88-.67h-.75c-.26 0-.68.1-1.04.49-.36.39-1.37 1.34-1.37 3.27 0 1.93 1.4 3.79 1.59 4.05.2.26 2.75 4.32 6.64 6.05.93.4 1.65.63 2.22.81.93.3 1.77.26 2.44.16.74-.11 2.31-.94 2.64-1.85.33-.92.33-1.71.23-1.85-.1-.13-.36-.23-.75-.43z"/>
+          </svg>
+        ),
+        clipboardList: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+            <rect x="9" y="3" width="6" height="4" rx="1"/>
+            <line x1="9" y1="12" x2="15" y2="12"/>
+            <line x1="9" y1="16" x2="13" y2="16"/>
+          </svg>
+        ),
+        checkCircle: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        ),
+        refreshCw: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        ),
+        /* Ícono de Trash/Eliminar */
+        trash: (
+          <svg className={className} width={size} height={size} viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            <line x1="10" y1="11" x2="10" y2="17"/>
+            <line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+        )
+      };
+      return icons[name] ?? null;
+    };
+
+
+    /* ===========================
+       UTILIDADES RUT CHILENO
+       =========================== */
+    const formatRut = (rut) => {
+      // Eliminar todo lo que no sea número o K
+      let valor = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+      
+      // Si está vacío, retornar vacío
+      if (!valor) return '';
+      
+      // Si tiene menos de 2 caracteres, no formatear aún
+      if (valor.length <= 1) return valor;
+      
+      // Separar cuerpo y dígito verificador
+      let dv = valor.slice(-1);
+      let numero = valor.slice(0, -1);
+      
+      // Formatear con puntos el cuerpo
+      numero = numero.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      
+      // Retornar formateado con guión
+      return `${numero}-${dv}`;
+    };
+
+    const validarRut = (rut) => {
+      if (!rut || rut.length < 3) return false;
+      let valor = rut.replace(/\./g, '').replace(/-/g, '');
+      let cuerpo = valor.slice(0, -1);
+      let dv = valor.slice(-1).toUpperCase();
+      if (!/^\d+$/.test(cuerpo)) return false;
+      let suma = 0;
+      let multiplo = 2;
+      for (let i = cuerpo.length - 1; i >= 0; i--) {
+        suma += parseInt(cuerpo.charAt(i)) * multiplo;
+        multiplo = multiplo < 7 ? multiplo + 1 : 2;
+      }
+      let dvEsperado = 11 - (suma % 11);
+      dvEsperado = dvEsperado === 11 ? '0' : dvEsperado === 10 ? 'K' : String(dvEsperado);
+      return dv === dvEsperado;
+    };
+        // Formatear fecha para mostrar (ej: "17 de febrero de 2026")
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Sin fecha';
+            
+            // Si viene como string "2026-02-17", parsearlo
+            const date = new Date(dateStr);
+            
+            if (isNaN(date.getTime())) {
+                return dateStr; // Retornar original si no se puede parsear
+            }
+            
+            const meses = [
+                'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+            ];
+            
+            const dia = date.getDate();
+            const mes = meses[date.getMonth()];
+            const año = date.getFullYear();
+            
+            return `${dia} de ${mes} de ${año}`;
+        }
+
+    /* ════════════════════════════════════════════════════════
+       GOOGLE SHEETS INTEGRATION
+       URL compartida con el Sistema de Agendamiento
+       ════════════════════════════════════════════════════════ */
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjrMKzJynF_xpIzM84ToDf9B9s2RcN-Yd2_qD-WjNMBMX-IrFBYhya_upQxZKSelkBNg/exec';
+
+    /* ── Guardar un registro individual en Sheets ── */
+/* ── Formateador de Fecha a DD/MM/AAAA ── */
+    const formatFechaCL = (fechaString) => {
+      if (!fechaString) return "Sin fecha";
+      const partes = fechaString.split('-');
+      if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
+      return fechaString;
+    };
+
+    /* ── Guardar un registro individual en Sheets ── */
+    const savePWARecord = async (tipo, record) => {
+      try {
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          // ⚠️ TRUCO CORS: text/plain permite que pase sin bloqueo
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'savePWARecord', tipo, record })
+        });
+        const json = await res.json();
+        return json.success;
+      } catch { return false; }
+    };
+
+    /* ── Cargar todos los registros de un tipo ── */
+    const loadPWAFromSheets = async (tipo) => {
+      try {
+        const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getPWAData&tipo=${tipo}`);
+        const json = await res.json();
+        return json.data || null;
+      } catch { return null; }
+    };
+
+    /* ── Cargar citas PENDIENTES del agendamiento ── */
+    const loadAgendaFromSheets = async () => {
+      try {
+        const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAll`);
+        const json = await res.json();
+        if (json.appointments) {
+          // Extraemos las pendientes y les aplicamos el formato de fecha de inmediato
+          return json.appointments
+            .filter(c => c.status === 'Pendiente')
+            .map(c => ({ ...c, date: formatFechaCL(c.date) }));
+        }
+        return [];
+      } catch { return []; }
+    };
+
+    /* ── Actualizar estado de cita en Sheets ── */
+    const updateCitaStatus = async (id, status) => {
+      try {
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'update', appointment: { id, status } })
+        });
+        const json = await res.json();
+        return json.success;
+      } catch { return false; }
+    };
+
+    /* ── Actualizar puntos de cliente ── */
+    const updatePuntosSheets = async (clienteId, puntos) => {
+      try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'updatePuntos', clienteId, puntos })
+        });
+      } catch {}
+    };
+
+    const generateId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    /* ===========================
+       APP
+       =========================== */
+    const App = () => {
+      const [activeTab, setActiveTab] = useState('home');
+      const [clientes, setClientes] = useState([]);
+      const [visitas, setVisitas] = useState([]);
+      const [diagnosticos, setDiagnosticos] = useState([]);
+      const [farmacos, setFarmacos] = useState([]);
+      const [evoluciones, setEvoluciones] = useState([]);
+      const [compras, setCompras] = useState([]);
+      const [searchTerm, setSearchTerm] = useState('');
+      const [showModal, setShowModal] = useState(null);
+      const [selectedClient, setSelectedClient] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [agenda, setAgenda] = useState([]);
+      const [loadingAgenda, setLoadingAgenda] = useState(false);
+      const [saving, setSaving] = useState(false);
+
+      useEffect(() => { loadData(); loadAgenda(); }, []);
+
+      const loadData = async () => {
+        // ✅ Variable para rastrear la cantidad de citas y lanzar notificaciones
+      const [cantidadCitas, setCantidadCitas] = useState(0);
+
+      useEffect(() => {
+        // 1. Pedir permiso de notificaciones
+        if ("Notification" in window && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+        
+        // 2. Cargar datos iniciales
+        loadData(); 
+        loadAgenda();
+
+        // 3. Revisar la agenda automáticamente cada 1 minuto (60000ms)
+        const interval = setInterval(() => {
+            loadAgenda();
+        }, 60000);
+
+        return () => clearInterval(interval); // Limpiar al salir
+      }, []);
+
+      const loadData = async () => {
+        setLoading(true);
+        // Mostrar datos locales inmediatamente (soporte offline)
+        try {
+          const setters = [
+            ['veterinaria_clientes',     setClientes],
+            ['veterinaria_visitas',      setVisitas],
+            ['veterinaria_diagnosticos', setDiagnosticos],
+            ['veterinaria_farmacos',     setFarmacos],
+            ['veterinaria_evoluciones',  setEvoluciones],
+            ['veterinaria_compras',      setCompras],
+          ];
+          setters.forEach(([key, setter]) => {
+            const d = localStorage.getItem(key);
+            if (d) setter(JSON.parse(d));
+          });
+        } catch {}
+
+        // Sincronizar con Google Sheets (fuente de verdad)
+        try {
+          const tipos = ['clientes','visitas','diagnosticos','farmacos','evoluciones','compras'];
+          const setters = [setClientes, setVisitas, setDiagnosticos, setFarmacos, setEvoluciones, setCompras];
+          const keys = ['veterinaria_clientes','veterinaria_visitas','veterinaria_diagnosticos','veterinaria_farmacos','veterinaria_evoluciones','veterinaria_compras'];
+          
+          const results = await Promise.all(tipos.map(t => loadPWAFromSheets(t)));
+          results.forEach((data, i) => {
+            if (data) {
+              setters[i](data);
+              localStorage.setItem(keys[i], JSON.stringify(data));
+            }
+          });
+        } catch (e) { console.log('Sin conexión, usando datos locales'); }
+
+        setLoading(false);
+      };
+
+      // Cargar agenda de citas pendientes
+// Cargar agenda y lanzar notificación si hay citas nuevas
+      const loadAgenda = async () => {
+        setLoadingAgenda(true);
+        const citas = await loadAgendaFromSheets();
+        
+        setCantidadCitas(prev => {
+            if (citas.length > prev && prev !== 0) {
+                if (Notification.permission === "granted") {
+                    new Notification("🐾 ¡Nueva Cita Agendada!", {
+                        body: "Revisa el panel, tienes un nuevo paciente pendiente.",
+                        icon: "icon-192x192.png"
+                    });
+                }
+            }
+            return citas.length;
+        });
+
+        setAgenda(citas);
+        setLoadingAgenda(false);
+      };
+
+      // Actualización local instantánea + sincronización Sheets
+      const saveClientes = async (data) => {
+        setClientes(data);
+        localStorage.setItem('veterinaria_clientes', JSON.stringify(data));
+        // Solo persistir el último registro nuevo (más eficiente)
+        const ultimo = data[data.length - 1];
+        if (ultimo) await savePWARecord('clientes', ultimo);
+      };
+      const saveVisitas = async (data) => {
+        setVisitas(data);
+        localStorage.setItem('veterinaria_visitas', JSON.stringify(data));
+        const ultimo = data[data.length - 1];
+        if (ultimo) await savePWARecord('visitas', ultimo);
+      };
+      const saveDiagnosticos = async (data) => {
+        setDiagnosticos(data);
+        localStorage.setItem('veterinaria_diagnosticos', JSON.stringify(data));
+        const ultimo = data[data.length - 1];
+        if (ultimo) await savePWARecord('diagnosticos', ultimo);
+      };
+      const saveFarmacos = async (data) => {
+        setFarmacos(data);
+        localStorage.setItem('veterinaria_farmacos', JSON.stringify(data));
+        const ultimo = data[data.length - 1];
+        if (ultimo) await savePWARecord('farmacos', ultimo);
+      };
+      const saveEvoluciones = async (data) => {
+        setEvoluciones(data);
+        localStorage.setItem('veterinaria_evoluciones', JSON.stringify(data));
+        const ultimo = data[data.length - 1];
+        if (ultimo) await savePWARecord('evoluciones', ultimo);
+      };
+      const saveCompras = async (data) => {
+        setCompras(data);
+        localStorage.setItem('veterinaria_compras', JSON.stringify(data));
+        const ultimo = data[data.length - 1];
+        if (ultimo) await savePWARecord('compras', ultimo);
+      };
+
+      const filteredClientes = clientes.filter((c) => {
+        const q = (searchTerm || '').toLowerCase();
+        return [c.rut, c.nombreMascota, c.nombreDueno]
+          .filter(Boolean)
+          .some(v => String(v).toLowerCase().includes(q));
+      });
+
+      const addCliente = (cliente) => {
+        const id = generateId();
+        const newCliente = { ...cliente, id, clienteId: id, puntos: 0, canjes: 0 };
+        saveClientes([...clientes, newCliente]);
+      };
+      const addVisita = (visita) => {
+        const newVisita = { ...visita, id: generateId() };
+        saveVisitas([...visitas, newVisita]);
+      };
+      const addDiagnostico = (diagnostico) => {
+        const newDiag = { ...diagnostico, id: generateId() };
+        saveDiagnosticos([...diagnosticos, newDiag]);
+      };
+      const addFarmaco = (farmaco) => {
+        const newFarm = { ...farmaco, id: generateId() };
+        saveFarmacos([...farmacos, newFarm]);
+      };
+      const addEvolucion = (evolucion) => {
+        const newEvol = { ...evolucion, id: generateId() };
+        saveEvoluciones([...evoluciones, newEvol]);
+      };
+      const addCompra = async (compra) => {
+        const newCompra = { ...compra, id: generateId(), fechaRegistro: new Date().toISOString() };
+        saveCompras([...compras, newCompra]);
+        const puntos = Math.floor((compra.monto || 0) / 1000);
+        const updatedClientes = clientes.map(c =>
+          c.clienteId === compra.clienteId ? { ...c, puntos: (c.puntos || 0) + puntos } : c
+        );
+        saveClientes(updatedClientes);
+        // Actualizar puntos en Sheets
+        const cliente = updatedClientes.find(c => c.clienteId === compra.clienteId);
+        if (cliente) await updatePuntosSheets(compra.clienteId, cliente.puntos);
+      };
+
+
+      /* ─────────────────────────────────────────────────────────
+         COMPLETAR VISITA DESDE AGENDA
+         1. Registra todos los datos clínicos en Sheets
+         2. Actualiza estado de la cita a "Realizada" en Sheets
+         ───────────────────────────────────────────────────────── */
+      const completeVisitFromAgenda = async (cita, formData) => {
+        setSaving(true);
+        const now = new Date().toISOString();
+        const agendaId = cita.id;
+
+        const baseInfo = {
+          petName:   cita.petName,
+          ownerName: cita.ownerName,
+          phone:     cita.phone,
+          agendaId,
+          fechaRegistro: now,
+        };
+
+        const fecha     = formData.fecha || cita.date;
+        const veterinario = formData.veterinario;
+        const clienteId = formData.clienteId || agendaId; // usar agendaId como ref si no hay clienteId
+
+        // — Visita principal —
+        const visitaRecord = {
+          ...baseInfo,
+          id: generateId(),
+          clienteId,
+          fecha,
+          motivo:        formData.motivo || cita.reason || '',
+          veterinario,
+          observaciones: formData.observaciones || '',
+        };
+        const newVisita = visitaRecord;
+        const newVisitas = [...visitas, newVisita];
+        setVisitas(newVisitas);
+        localStorage.setItem('veterinaria_visitas', JSON.stringify(newVisitas));
+        await savePWARecord('visitas', visitaRecord);
+
+        // — Diagnóstico (si se llenó) —
+        if (formData.diagnostico) {
+          const diagRecord = {
+            ...baseInfo,
+            id: generateId(),
+            clienteId,
+            fecha,
+            diagnostico: formData.diagnostico,
+            notas:       formData.notasDiag || '',
+            veterinario,
+          };
+          const newDiag = [...diagnosticos, diagRecord];
+          setDiagnosticos(newDiag);
+          localStorage.setItem('veterinaria_diagnosticos', JSON.stringify(newDiag));
+          await savePWARecord('diagnosticos', diagRecord);
+        }
+
+        // — Fármaco (si se llenó) —
+        if (formData.farmaco) {
+          const farmRecord = {
+            ...baseInfo,
+            id: generateId(),
+            clienteId,
+            fecha,
+            farmaco:    formData.farmaco,
+            dosis:      formData.dosis || '',
+            via:        formData.via || '',
+            duracion:   formData.duracion || '',
+            veterinario,
+          };
+          const newFarm = [...farmacos, farmRecord];
+          setFarmacos(newFarm);
+          localStorage.setItem('veterinaria_farmacos', JSON.stringify(newFarm));
+          await savePWARecord('farmacos', farmRecord);
+        }
+
+        // — Evolución (si se llenó) —
+        if (formData.evolucion) {
+          const evolRecord = {
+            ...baseInfo,
+            id: generateId(),
+            clienteId,
+            fecha,
+            descripcion:    formData.evolucion,
+            recomendaciones: formData.recomendaciones || '',
+            veterinario,
+          };
+          const newEvol = [...evoluciones, evolRecord];
+          setEvoluciones(newEvol);
+          localStorage.setItem('veterinaria_evoluciones', JSON.stringify(newEvol));
+          await savePWARecord('evoluciones', evolRecord);
+        }
+
+        // — Compra / Cobro (si se llenó) —
+        if (formData.tipoCompra && formData.montoCompra) {
+          const compraRecord = {
+            ...baseInfo,
+            id: generateId(),
+            clienteId,
+            fecha,
+            tipo:        formData.tipoCompra,
+            descripcion: formData.descCompra || '',
+            monto:       Number(formData.montoCompra) || 0,
+            agendaId,
+            fechaRegistro: now,
+          };
+          const newComp = [...compras, compraRecord];
+          setCompras(newComp);
+          localStorage.setItem('veterinaria_compras', JSON.stringify(newComp));
+          await savePWARecord('compras', compraRecord);
+          // Puntos (1 por cada $1.000)
+          const puntos = Math.floor((compraRecord.monto) / 1000);
+          if (puntos > 0 && clienteId) {
+            const updCl = clientes.map(c =>
+              c.clienteId === clienteId ? { ...c, puntos: (c.puntos||0) + puntos } : c
+            );
+            setClientes(updCl);
+            localStorage.setItem('veterinaria_clientes', JSON.stringify(updCl));
+            const cl = updCl.find(c => c.clienteId === clienteId);
+            if (cl) await updatePuntosSheets(clienteId, cl.puntos);
+          }
+        }
+
+        // — Actualizar estado de la cita en Sheets del Agendamiento —
+        await updateCitaStatus(cita.id, 'Realizada');
+        setAgenda(prev => prev.filter(c => c.id !== cita.id));
+
+        setSaving(false);
+        return true;
+      };
+
+      const deleteCliente = (clienteId) => {
+        // Confirmar antes de eliminar
+        const cliente = clientes.find(c => c.clienteId === clienteId);
+        if (!cliente) return;
+        
+        const confirmacion = window.confirm(
+          `¿Estás seguro de eliminar a ${cliente.nombreMascota} y todo su historial?\n\nEsta acción no se puede deshacer.`
+        );
+        
+        if (!confirmacion) return;
+
+        // Eliminar cliente
+        const nuevosClientes = clientes.filter(c => c.clienteId !== clienteId);
+        saveClientes(nuevosClientes);
+
+        // Eliminar todo el historial del cliente
+        const nuevasVisitas = visitas.filter(v => v.clienteId !== clienteId);
+        saveVisitas(nuevasVisitas);
+
+        const nuevosDiagnosticos = diagnosticos.filter(d => d.clienteId !== clienteId);
+        saveDiagnosticos(nuevosDiagnosticos);
+
+        const nuevosFarmacos = farmacos.filter(f => f.clienteId !== clienteId);
+        saveFarmacos(nuevosFarmacos);
+
+        const nuevasEvoluciones = evoluciones.filter(e => e.clienteId !== clienteId);
+        saveEvoluciones(nuevasEvoluciones);
+
+        const nuevasCompras = compras.filter(c => c.clienteId !== clienteId);
+        saveCompras(nuevasCompras);
+
+        alert(`${cliente.nombreMascota} y su historial han sido eliminados.`);
+      };
+
+      const getHistorialCliente = (clienteId) => {
+        return {
+          visitas: visitas.filter(v => v.clienteId === clienteId).sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
+          diagnosticos: diagnosticos.filter(d => d.clienteId === clienteId).sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
+          farmacos: farmacos.filter(f => f.clienteId === clienteId).sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
+          evoluciones: evoluciones.filter(e => e.clienteId === clienteId).sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
+          compras: compras.filter(c => c.clienteId === clienteId).sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+        };
+      };
+
+      /* =================================================
+         WhatsApp desde formularios (Diagnóstico/Fármaco/
+         Evolución/Compra) - Botón manual con SVG embebido
+         ================================================= */
+      const validarTelefono = (telefono) => /^\+569\d{8}$/.test(telefono);
+
+      const enviarWhatsAppDesdeFormulario = (data) => {
+        const cliente = clientes.find(c => c.clienteId === data.clienteId);
+        if (!cliente) {
+          alert('Selecciona una mascota/cliente primero.');
+          return;
+        }
+        if (!cliente.telefono || !validarTelefono(cliente.telefono)) {
+          alert('El cliente no tiene un teléfono válido. Formato requerido: +569XXXXXXXX');
+          return;
+        }
+
+        let mensaje = '';
+        if (data.diagnostico) mensaje = buildMensajeDiagnostico(data, cliente);
+        else if (data.farmaco) mensaje = buildMensajeFarmaco(data, cliente);
+        else if (typeof data.descripcion === 'string' && data.descripcion.length && data.veterinario) {
+          mensaje = buildMensajeEvolucion(data, cliente);
+        } else if (typeof data.monto !== 'undefined') mensaje = buildMensajeCompra(data, cliente);
+
+        if (!mensaje) {
+          alert('No hay datos para enviar. Completa el formulario.');
+          return;
+        }
+
+        const url = `https://wa.me/${cliente.telefono.replace('+', '')}?text=${encodeURIComponent(mensaje)}`;
+        window.open(url, "_blank");
+      };
+
+      const buildCabecera = (cliente) => {
+        return `Hola ${cliente.nombreDueno}, te compartimos info de ${cliente.nombreMascota}:\n`;
+      };
+      const buildFirma = () => `\n\nManada Patitas 🐾\n📷 Síguenos en Instagram: https://instagram.com/manada_patitaas`;
+
+      const buildMensajeDiagnostico = (d, cliente) => {
+        return (
+          buildCabecera(cliente) +
+          `🩺 *Diagnóstico:* ${d.diagnostico}\n` +
+          (d.notas ? `📝 Notas: ${d.notas}\n` : '') +
+          `👨‍⚕️ Veterinario: ${d.veterinario}\n` +
+          `📅 Fecha: ${d.fecha}` +
+          buildFirma()
+        );
+      };
+
+      const buildMensajeFarmaco = (f, cliente) => {
+        return (
+          buildCabecera(cliente) +
+          `💊 *Fármaco:* ${f.farmaco}\n` +
+          `📦 Dosis: ${f.dosis}\n` +
+          `🧭 Vía: ${f.via}\n` +
+          `⏳ Duración: ${f.duracion}\n` +
+          `👨‍⚕️ Veterinario: ${f.veterinario}\n` +
+          `📅 Fecha: ${f.fecha}` +
+          buildFirma()
+        );
+      };
+
+      const buildMensajeEvolucion = (e, cliente) => {
+        return (
+          buildCabecera(cliente) +
+          `📈 *Evolución:* ${e.descripcion}\n` +
+          (e.recomendaciones ? `📝 Recomendaciones: ${e.recomendaciones}\n` : '') +
+          `👨‍⚕️ Veterinario: ${e.veterinario}\n` +
+          `📅 Fecha: ${e.fecha}` +
+          buildFirma()
+        );
+      };
+
+      const buildMensajeCompra = (c, cliente) => {
+        const monto = (c.monto || 0).toLocaleString('es-CL');
+        return (
+          buildCabecera(cliente) +
+          `🛒 *Compra:* ${c.tipo}\n` +
+          (c.descripcion ? `📌 Descripción: ${c.descripcion}\n` : '') +
+          `💵 Monto: $${monto} CLP\n` +
+          `📅 Fecha: ${c.fecha}` +
+          buildFirma()
+        );
+      };
+/* ===========================
+         Render principal de la App
+         =========================== */
+
+      if (loading) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-emerald-700 font-medium">Cargando datos...</p>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 pb-20">
+
+          {/* =======================
+              HEADER SUPERIOR
+             ======================= */}
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 shadow-lg">
+            <div className="flex items-center gap-3">
+              <img src="logo_manada.png"
+                   alt="Manada Patitas"
+                   className="h-12 w-12 rounded-lg shadow-sm bg-white/10 p-1" />
+              <div>
+                <h1 className="text-2xl font-bold mb-0">Manada Patitas</h1>
+                <p className="text-emerald-100 text-sm">Sistema Veterinario a Domicilio</p>
+              </div>
+            </div>
+          </div>
+
+          {/* =======================
+              CONTENIDO POR TABS
+             ======================= */}
+          <div className="p-4">
+            {activeTab === 'home' && <HomeTab clientes={clientes} visitas={visitas} agenda={agenda} />}
+            {activeTab === 'agenda' && (
+              <AgendaTab
+                agenda={agenda}
+                loadingAgenda={loadingAgenda}
+                loadAgenda={loadAgenda}
+                saving={saving}
+                completeVisitFromAgenda={completeVisitFromAgenda}
+                clientes={clientes}
+              />
+            )}
+            {activeTab === 'clientes' && (
+              <ClientesTab
+                clientes={filteredClientes}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                setShowModal={setShowModal}
+                setSelectedClient={setSelectedClient}
+              />
+            )}
+            {activeTab === 'visitas' && (
+              <VisitasTab
+                visitas={visitas}
+                clientes={clientes}
+                setShowModal={setShowModal}
+              />
+            )}
+            {activeTab === 'historial' && (
+              <HistorialTab
+                selectedClient={selectedClient}
+                setSelectedClient={setSelectedClient}
+                clientes={clientes}
+                getHistorialCliente={getHistorialCliente}
+                deleteCliente={deleteCliente}
+              />
+            )}
+          </div>
+
+          {/* ======================================
+              MODALES (se completan en PARTE 3/5)
+             ====================================== */}
+
+          {showModal === 'nuevoCliente' && (
+            <FormModal title="Nuevo Cliente" onClose={() => setShowModal(null)}>
+              <ClienteForm
+                onSubmit={(data) => {
+                  addCliente(data);
+                  setShowModal(null);
+                }}
+              />
+            </FormModal>
+          )}
+
+          {showModal === 'editarCliente' && selectedClient && (
+            <FormModal title="Editar Cliente" onClose={() => setShowModal(null)}>
+              <ClienteForm
+                initialData={selectedClient}
+                onSubmit={(data) => {
+                  const updated = clientes.map(c =>
+                    c.id === selectedClient.id ? { ...c, ...data } : c
+                  );
+                  saveClientes(updated);
+                  setShowModal(null);
+                }}
+              />
+            </FormModal>
+          )}
+
+          {showModal === 'nuevaVisita' && (
+            <FormModal title="Nueva Visita" onClose={() => setShowModal(null)}>
+              <VisitaForm
+                clientes={clientes}
+                onSubmit={(data) => {
+                  addVisita(data);
+                  setShowModal(null);
+                }}
+                enviarWhatsApp={enviarWhatsAppDesdeFormulario}
+              />
+            </FormModal>
+          )}
+
+          {showModal === 'nuevoDiagnostico' && (
+            <FormModal title="Nuevo Diagnóstico" onClose={() => setShowModal(null)}>
+              <DiagnosticoForm
+                clientes={clientes}
+                onSubmit={(data) => {
+                  addDiagnostico(data);
+                  setShowModal(null);
+                }}
+                enviarWhatsApp={enviarWhatsAppDesdeFormulario}
+              />
+            </FormModal>
+          )}
+
+          {showModal === 'nuevoFarmaco' && (
+            <FormModal title="Nuevo Fármaco" onClose={() => setShowModal(null)}>
+              <FarmacoForm
+                clientes={clientes}
+                onSubmit={(data) => {
+                  addFarmaco(data);
+                  setShowModal(null);
+                }}
+                enviarWhatsApp={enviarWhatsAppDesdeFormulario}
+              />
+            </FormModal>
+          )}
+
+          {showModal === 'nuevaEvolucion' && (
+            <FormModal title="Nueva Evolución" onClose={() => setShowModal(null)}>
+              <EvolucionForm
+                clientes={clientes}
+                onSubmit={(data) => {
+                  addEvolucion(data);
+                  setShowModal(null);
+                }}
+                enviarWhatsApp={enviarWhatsAppDesdeFormulario}
+              />
+            </FormModal>
+          )}
+
+          {showModal === 'nuevaCompra' && (
+            <FormModal title="Nueva Compra" onClose={() => setShowModal(null)}>
+              <CompraForm
+                clientes={clientes}
+                onSubmit={(data) => {
+                  addCompra(data);
+                  setShowModal(null);
+                }}
+                enviarWhatsApp={enviarWhatsAppDesdeFormulario}
+              />
+            </FormModal>
+          )}
+
+          {/* Overlay guardando */}
+          {saving && (
+            <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-6 shadow-2xl text-center">
+                <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                <p className="font-bold text-gray-800">Guardando en Google Sheets...</p>
+                <p className="text-sm text-gray-500 mt-1">Actualizando estado de la cita</p>
+              </div>
+            </div>
+          )}
+
+          {/* ========================
+              NAVEGACIÓN INFERIOR
+             ======================== */}
+          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
+            <div className="flex justify-around items-center h-16">
+              <TabButton
+                icon="home"
+                label="Inicio"
+                active={activeTab === 'home'}
+                onClick={() => setActiveTab('home')}
+              />
+              <TabButton
+                icon="users"
+                label="Clientes"
+                active={activeTab === 'clientes'}
+                onClick={() => setActiveTab('clientes')}
+              />
+              <TabButton
+                icon="clipboardList"
+                label="Agenda"
+                active={activeTab === 'agenda'}
+                onClick={() => setActiveTab('agenda')}
+              />
+              <TabButton
+                icon="calendar"
+                label="Visitas"
+                active={activeTab === 'visitas'}
+                onClick={() => setActiveTab('visitas')}
+              />
+              <TabButton
+                icon="fileText"
+                label="Historial"
+                active={activeTab === 'historial'}
+                onClick={() => setActiveTab('historial')}
+              />
+            </div>
+          </nav>
+        </div>
+      );
+    }; // FIN DEL COMPONENTE APP
+
+
+    /* ===========================
+       BOTÓN EN TABS
+       =========================== */
+    const TabButton = ({ icon, label, active, onClick }) => (
+      <button
+        onClick={onClick}
+        className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+          active ? 'text-emerald-600' : 'text-gray-500'
+        }`}
+      >
+        <Icon name={icon} size={24} />
+        <span className="text-xs mt-1 font-medium">{label}</span>
+      </button>
+    );
+``
+/* ===========================
+       HOME TAB
+       =========================== */
+    const HomeTab = ({ clientes, visitas, agenda }) => {
+      const visitasHoy = visitas.filter(v => {
+        const hoy = new Date().toISOString().split('T')[0];
+        return v.fecha === hoy;
+      }).length;
+
+      const totalPuntos = clientes.reduce((sum, c) => sum + (c.puntos || 0), 0);
+
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl p-4 shadow-md border border-emerald-100">
+              <Icon name="users" className="text-emerald-600 mb-2" size={24} />
+              <p className="text-2xl font-bold text-gray-800">{clientes.length}</p>
+              <p className="text-xs text-gray-600 mt-1">Clientes</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-md border border-teal-100">
+              <Icon name="calendar" className="text-teal-600 mb-2" size={24} />
+              <p className="text-2xl font-bold text-gray-800">{visitasHoy}</p>
+              <p className="text-xs text-gray-600 mt-1">Visitas hoy</p>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-4 shadow-md border border-blue-200">
+              <Icon name="clipboardList" className="text-blue-600 mb-2" size={24} />
+              <p className="text-2xl font-bold text-blue-700">{(agenda||[]).length}</p>
+              <p className="text-xs text-blue-600 mt-1">Pendientes</p>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 shadow-md border border-amber-200">
+            <div className="flex items-center mb-3">
+              <Icon name="trendingUp" className="text-amber-600 mr-2" size={24} />
+              <h3 className="font-bold text-gray-800">Sistema de Puntos</h3>
+            </div>
+            <p className="text-2xl font-bold text-amber-700">{totalPuntos} puntos</p>
+            <p className="text-sm text-gray-600 mt-1">Acumulados por todos los clientes</p>
+          </div>
+
+          <div className="bg-white rounded-xl p-5 shadow-md">
+            <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+              <Icon name="activity" className="mr-2 text-emerald-600" size={20} />
+              Últimas visitas
+            </h3>
+            {visitas.slice(-5).reverse().map(v => {
+              const cliente = clientes.find(c => c.clienteId === v.clienteId);
+              return (
+                <div key={v.id} className="py-3 border-b border-gray-100 last:border-0">
+                  <p className="font-semibold text-gray-800">
+                    {cliente?.nombreMascota || 'Desconocido'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {v.fecha} - {v.motivo}
+                  </p>
+                </div>
+              );
+            })}
+            {visitas.length === 0 && (
+              <p className="text-gray-500 text-center py-4">No hay visitas registradas</p>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+
+    /* ===========================
+       CLIENTES TAB (con botón Editar)
+       =========================== */
+    const ClientesTab = ({ clientes, searchTerm, setSearchTerm, setShowModal, setSelectedClient }) => {
+      return (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Icon name="search" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Buscar por RUT, mascota o tutor..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <button
+              onClick={() => setShowModal('nuevoCliente')}
+              className="bg-emerald-600 text-white px-4 rounded-xl shadow-md hover:bg-emerald-700 transition-colors"
+            >
+              <Icon name="plus" size={24} />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {clientes.map((cliente) => (
+              <div
+                key={cliente.id}
+                onClick={() => { setSelectedClient(cliente); }}
+                className="bg-white rounded-xl p-4 shadow-md border border-gray-100 active:bg-gray-50 transition-colors"
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h3 className="font-bold text-gray-800 text-lg">{cliente.nombreMascota}</h3>
+                    <p className="text-sm text-gray-600">{cliente.especie}</p>
+                    <p className="text-sm text-gray-500 mt-1">Tutor: {cliente.nombreDueno}</p>
+                    <p className="text-xs text-gray-400 mt-1">RUT: {cliente.rut}</p>
+                    <p className="text-xs text-gray-500 mt-1">{cliente.raza} • {cliente.edad}</p>
+                    {cliente.telefono && (
+                      <p className="text-xs text-gray-500 mt-1">📞 {cliente.telefono}</p>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedClient(cliente);
+                        setShowModal("editarCliente");
+                      }}
+                      className="mt-2 text-blue-600 text-sm underline"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                  <div className="text-right">
+                    <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-sm font-bold">
+                      ⭐ {cliente.puntos || 0}
+                    </div>
+                    <Icon name="chevronRight" className="text-gray-400 mt-2" size={20} />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {clientes.length === 0 && (
+              <div className="text-center py-12">
+                <Icon name="users" className="mx-auto text-gray-300 mb-3" size={48} />
+                <p className="text-gray-500">No hay clientes registrados</p>
+                <button
+                  onClick={() => setShowModal('nuevoCliente')}
+                  className="mt-4 bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  Agregar primer cliente
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+
+    /* ===========================
+       VISITAS TAB (solo crea/abre otros formularios)
+       =========================== */
+    const VisitasTab = ({ visitas, clientes, setShowModal }) => {
+      return (
+        <div className="space-y-4">
+          <button
+            onClick={() => setShowModal('nuevaVisita')}
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 rounded-xl shadow-lg font-semibold flex items-center justify-center gap-2"
+          >
+            <Icon name="plus" size={20} />
+            Nueva Visita
+          </button>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setShowModal('nuevoDiagnostico')}
+              className="bg-white border-2 border-blue-200 text-blue-700 py-3 rounded-xl font-semibold"
+            >
+              📋 Diagnóstico
+            </button>
+            <button
+              onClick={() => setShowModal('nuevoFarmaco')}
+              className="bg-white border-2 border-purple-200 text-purple-700 py-3 rounded-xl font-semibold"
+            >
+              💊 Fármaco
+            </button>
+            <button
+              onClick={() => setShowModal('nuevaEvolucion')}
+              className="bg-white border-2 border-green-200 text-green-700 py-3 rounded-xl font-semibold"
+            >
+              📈 Evolución
+            </button>
+            <button
+              onClick={() => setShowModal('nuevaCompra')}
+              className="bg-white border-2 border-amber-200 text-amber-700 py-3 rounded-xl font-semibold"
+            >
+              🛒 Compra
+            </button>
+          </div>
+
+          <div className="space-y-3 mt-6">
+            <h3 className="font-bold text-gray-800 text-lg">Visitas Recientes</h3>
+            {visitas.slice(-10).reverse().map(visita => {
+              const cliente = clientes.find(c => c.clienteId === visita.clienteId);
+              return (
+                <div key={visita.id} className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-gray-800">
+                      {cliente?.nombreMascota || 'Desconocido'}
+                    </h4>
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
+                      {visita.fecha}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-1">
+                    <strong>Motivo:</strong> {visita.motivo}
+                  </p>
+                  <p className="text-sm text-gray-600 mb-1">
+                    <strong>Veterinario:</strong> {visita.veterinario}
+                  </p>
+                  {visita.observaciones && (
+                    <p className="text-sm text-gray-500 mt-2 italic">{visita.observaciones}</p>
+                  )}
+                </div>
+              );
+            })}
+            {visitas.length === 0 && (
+              <div className="text-center py-12">
+                <Icon name="calendar" className="mx-auto text-gray-300 mb-3" size={48} />
+                <p className="text-gray-500">No hay visitas registradas</p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+
+    /* ===========================
+       HISTORIAL TAB (sin botón WhatsApp en cabecera)
+       =========================== */
+    const HistorialTab = ({ selectedClient, setSelectedClient, clientes, getHistorialCliente, deleteCliente }) => {
+      if (!selectedClient) {
+        return (
+          <div className="space-y-4">
+            <h3 className="font-bold text-gray-800 text-lg mb-3">Selecciona un cliente</h3>
+            <div className="space-y-3">
+              {clientes.map(cliente => (
+                <div
+                  key={cliente.id}
+                  onClick={() => setSelectedClient(cliente)}
+                  className="bg-white rounded-xl p-4 shadow-md border border-gray-100 active:bg-gray-50 transition-colors flex justify-between items-center"
+                >
+                  <div>
+                    <h4 className="font-bold text-gray-800">{cliente.nombreMascota}</h4>
+                    <p className="text-sm text-gray-600">{cliente.nombreDueno}</p>
+                  </div>
+                  <Icon name="chevronRight" className="text-gray-400" size={20} />
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      const historial = getHistorialCliente(selectedClient.clienteId);
+
+      return (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center mb-2">
+            <button
+              onClick={() => setSelectedClient(null)}
+              className="text-emerald-600 font-semibold"
+            >
+              ← Volver
+            </button>
+            <button
+              onClick={() => {
+                deleteCliente(selectedClient.clienteId);
+                setSelectedClient(null);
+              }}
+              className="text-red-600 font-semibold flex items-center gap-1 hover:text-red-700"
+            >
+              <Icon name="trash" size={20} />
+              Eliminar
+            </button>
+          </div>
+
+          <div className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white rounded-xl p-5 shadow-lg">
+            <h2 className="text-2xl font-bold mb-1">{selectedClient.nombreMascota}</h2>
+            <p className="text-emerald-100">{selectedClient.especie}</p>
+
+            <div className="flex justify-between items-center mt-4 pt-4 border-t border-emerald-400">
+              <div>
+                <p className="text-sm text-emerald-100">Dueño</p>
+                <p className="font-semibold">{selectedClient.nombreDueno}</p>
+                {selectedClient.telefono && (
+                  <p className="text-sm text-emerald-100 mt-1">📞 {selectedClient.telefono}</p>
+                )}
+              </div>
+              <div className="bg-white bg-opacity-20 px-4 py-2 rounded-lg">
+                <p className="text-sm text-emerald-100">Puntos</p>
+                <p className="text-2xl font-bold">⭐ {selectedClient.puntos || 0}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-emerald-100 mt-3">RUT: {selectedClient.rut}</p>
+            <div className="grid grid-cols-2 gap-2 mt-2 text-xs text-emerald-100">
+              <div>
+                <p className="font-semibold">Raza:</p>
+                <p>{selectedClient.raza}</p>
+              </div>
+              <div>
+                <p className="font-semibold">Edad:</p>
+                <p>{selectedClient.edad}</p>
+              </div>
+            </div>
+          </div>
+
+          {historial.visitas.length > 0 && (
+            <div className="bg-white rounded-xl p-4 shadow-md">
+              <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                <Icon name="calendar" className="mr-2 text-emerald-600" size={20} />
+                Visitas ({historial.visitas.length})
+              </h3>
+              {historial.visitas.map(v => (
+                <div key={v.id} className="py-3 border-b border-gray-100 last:border-0">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-gray-800">{v.motivo}</p>
+                      <p className="text-sm text-gray-600">Dr. {v.veterinario}</p>
+                      {v.observaciones && (
+                        <p className="text-sm text-gray-500 mt-1 italic">{v.observaciones}</p>
+                      )}
+                    </div>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                      {v.fecha}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {historial.diagnosticos.length > 0 && (
+            <div className="bg-white rounded-xl p-4 shadow-md">
+              <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                <Icon name="fileText" className="mr-2 text-blue-600" size={20} />
+                Diagnósticos ({historial.diagnosticos.length})
+              </h3>
+              {historial.diagnosticos.map(d => (
+                <div key={d.id} className="py-3 border-b border-gray-100 last:border-0">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-gray-800">{d.diagnostico}</p>
+                      <p className="text-sm text-gray-600">Dr. {d.veterinario}</p>
+                      {d.notas && <p className="text-sm text-gray-500 mt-1 italic">{d.notas}</p>}
+                    </div>
+                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">
+                      {d.fecha}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {historial.farmacos.length > 0 && (
+            <div className="bg-white rounded-xl p-4 shadow-md">
+              <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                <Icon name="pill" className="mr-2 text-purple-600" size={20} />
+                Fármacos ({historial.farmacos.length})
+              </h3>
+              {historial.farmacos.map(f => (
+                <div key={f.id} className="py-3 border-b border-gray-100 last:border-0">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-gray-800">{f.farmaco}</p>
+                      <p className="text-sm text-gray-600">Dosis: {f.dosis} - Vía: {f.via}</p>
+                      <p className="text-sm text-gray-600">Duración: {f.duracion}</p>
+                      <p className="text-sm text-gray-500">Dr. {f.veterinario}</p>
+                    </div>
+                    <span className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded">
+                      {f.fecha}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {historial.evoluciones.length > 0 && (
+            <div className="bg-white rounded-xl p-4 shadow-md">
+              <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                <Icon name="activity" className="mr-2 text-green-600" size={20} />
+                Evoluciones ({historial.evoluciones.length})
+              </h3>
+              {historial.evoluciones.map(e => (
+                <div key={e.id} className="py-3 border-b border-gray-100 last:border-0">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-gray-800">{e.descripcion}</p>
+                      {e.recomendaciones && (
+                        <p className="text-sm text-gray-600 mt-1">Rec: {e.recomendaciones}</p>
+                      )}
+                      <p className="text-sm text-gray-500 mt-1">Dr. {e.veterinario}</p>
+                    </div>
+                    <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded">
+                      {e.fecha}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {historial.compras.length > 0 && (
+            <div className="bg-white rounded-xl p-4 shadow-md">
+              <h3 className="font-bold text-gray-800 mb-3 flex items-center">
+                <Icon name="shoppingBag" className="mr-2 text-amber-600" size={20} />
+                Compras ({historial.compras.length})
+              </h3>
+              {historial.compras.map(c => (
+                <div key={c.id} className="py-3 border-b border-gray-100 last:border-0">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-gray-800">{c.tipo}</p>
+                      <p className="text-sm text-gray-600">{c.descripcion}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-amber-600">
+                        ${c.monto.toLocaleString('es-CL')}
+                      </p>
+                      <span className="text-xs bg-amber-50 text-amber-600 px-2 py-1 rounded">
+                        {c.fecha}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+
+    /* ===========================
+       MODAL CONTENEDOR
+       =========================== */
+    const FormModal = ({ title, onClose, children }) => (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50 animate-fadeIn">
+        <div className="bg-white rounded-t-3xl w-full max-h-[90vh] overflow-y-auto animate-slideUp shadow-2xl">
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+            <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+              <Icon name="x" size={24} />
+            </button>
+          </div>
+          <div className="p-4">
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+/* ===========================
+       FORMULARIO: CLIENTE
+       - Teléfono con validación +569XXXXXXXX
+       - Soporte de edición (initialData)
+       =========================== */
+
+    /* ════════════════════════════════════════════════════════
+       AGENDA TAB
+       ════════════════════════════════════════════════════════ */
+    const AgendaTab = ({ agenda, loadingAgenda, loadAgenda, saving, completeVisitFromAgenda, clientes }) => {
+      const [vista, setVista] = React.useState('lista'); // 'lista' | 'formulario'
+      const [citaActiva, setCitaActiva] = React.useState(null);
+
+      const formatFecha = (d) => {
+        if (!d) return '';
+        try {
+          return new Date(d + 'T00:00:00').toLocaleDateString('es-CL', {
+            weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+          });
+        } catch { return d; }
+      };
+
+      const getBadge = (cita) => {
+        const hoy = new Date().toISOString().split('T')[0];
+        if (cita.date === hoy)  return { label: 'Hoy', cls: 'bg-green-100 text-green-700' };
+        if (cita.date < hoy)    return { label: 'Atrasada', cls: 'bg-red-100 text-red-700' };
+        return { label: 'Próxima', cls: 'bg-blue-100 text-blue-700' };
+      };
+
+      // ── Vista: Formulario de visita ──
+      if (vista === 'formulario' && citaActiva) {
+        return (
+          <div>
+            <button onClick={() => { setVista('lista'); setCitaActiva(null); }}
+              className="flex items-center gap-2 text-emerald-600 font-semibold mb-4">
+              ← Volver a Agenda
+            </button>
+
+            {/* Tarjeta resumen de la cita */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl p-4 mb-4 shadow-lg">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-2xl">🐾</span>
+                <div>
+                  <p className="font-bold text-xl">{citaActiva.petName}</p>
+                  <p className="text-blue-100 text-sm">{citaActiva.ownerName}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-1 mt-3 text-sm text-blue-100">
+                <p>📞 {citaActiva.phone}</p>
+                <p>🕐 {citaActiva.time}</p>
+                <p className="col-span-2">📍 {citaActiva.address}, {citaActiva.comuna}</p>
+                <p className="col-span-2">📅 {formatFecha(citaActiva.date)}</p>
+                {citaActiva.reason && <p className="col-span-2">💬 {citaActiva.reason}</p>}
+              </div>
+            </div>
+
+            <VisitaAgendaForm
+              cita={citaActiva}
+              clientes={clientes}
+              onSubmit={async (formData) => {
+                const ok = await completeVisitFromAgenda(citaActiva, formData);
+                if (ok) {
+                  alert('✅ Visita registrada en Google Sheets\nEstado de cita actualizado a Realizada');
+                  setVista('lista');
+                  setCitaActiva(null);
+                }
+              }}
+            />
+          </div>
+        );
+      }
+
+      // ── Vista: Lista de citas ──
+      const citasOrdenadas = [...(agenda || [])].sort((a, b) => {
+        const da = new Date((a.date || '') + 'T' + (a.time || '00:00'));
+        const db = new Date((b.date || '') + 'T' + (b.time || '00:00'));
+        return da - db;
+      });
+
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <Icon name="clipboardList" size={24} className="text-blue-600" />
+              Agenda ({citasOrdenadas.length})
+            </h2>
+            <button onClick={loadAgenda} disabled={loadingAgenda}
+              className="bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold flex items-center gap-1 shadow disabled:opacity-50 text-sm">
+              <Icon name="refreshCw" size={16} />
+              {loadingAgenda ? '...' : 'Actualizar'}
+            </button>
+          </div>
+
+          {loadingAgenda && (
+            <div className="text-center py-10">
+              <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              <p className="text-blue-600 text-sm">Cargando citas...</p>
+            </div>
+          )}
+
+          {!loadingAgenda && citasOrdenadas.length === 0 && (
+            <div className="text-center py-14 bg-white rounded-2xl shadow-md">
+              <Icon name="clipboardList" size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="font-semibold text-gray-600">Sin citas pendientes</p>
+              <p className="text-gray-400 text-sm mt-1">Las citas se crean desde el sistema de agendamiento</p>
+              <button onClick={loadAgenda}
+                className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-xl text-sm font-semibold">
+                Volver a cargar
+              </button>
+            </div>
+          )}
+
+          {!loadingAgenda && citasOrdenadas.map(cita => {
+            const badge = getBadge(cita);
+            const telNum = String(cita.phone || '').replace(/\D/g, '');
+            return (
+              <div key={cita.id} className="bg-white rounded-2xl p-4 shadow-md border border-gray-100">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🐾</span>
+                    <div>
+                      <p className="font-bold text-gray-800 text-lg leading-tight">{cita.petName}</p>
+                      <p className="text-gray-500 text-sm">{cita.ownerName}</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full font-semibold ${badge.cls}`}>{badge.label}</span>
+                </div>
+
+                <div className="text-sm text-gray-600 space-y-0.5 mb-3 ml-8">
+                  <p>📞 {cita.phone}</p>
+                  <p>📍 {cita.address}, {cita.comuna}</p>
+                  <p className="font-semibold text-blue-700">📅 {formatFecha(cita.date)} · 🕐 {cita.time}</p>
+                  {cita.reason && <p>💬 {cita.reason}</p>}
+                  {cita.accessCode && <p className="text-gray-400 text-xs">🔑 {cita.accessCode}</p>}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.open(
+                      `https://wa.me/${telNum}?text=${encodeURIComponent('Hola ' + cita.ownerName + ', te confirmo que estoy en camino para la visita de ' + cita.petName + ' 🐾 Manada Patitas')}`,
+                      '_blank'
+                    )}
+                    className="flex-1 bg-green-50 border border-green-300 text-green-700 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1">
+                    <Icon name="whatsapp" size={16} /> WhatsApp
+                  </button>
+                  <button
+                    onClick={() => { setCitaActiva(cita); setVista('formulario'); }}
+                    className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1 shadow-md">
+                    <Icon name="checkCircle" size={16} /> Completar Visita
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
+
+    /* ════════════════════════════════════════════════════════
+       FORMULARIO DE VISITA DESDE AGENDA
+       (Visita + Diagnóstico + Fármaco + Evolución + Compra)
+       ════════════════════════════════════════════════════════ */
+    const VisitaAgendaForm = ({ cita, clientes, onSubmit }) => {
+      const { useState: useS } = React;
+      const [tab, setTab] = useS('visita');
+      const [formData, setFormData] = useS({
+        fecha:          cita.date || new Date().toISOString().split('T')[0],
+        motivo:         cita.reason || '',
+        veterinario:    '',
+        observaciones:  '',
+        // Diagnóstico
+        diagnostico:    '',
+        notasDiag:      '',
+        // Fármaco
+        farmaco:        '',
+        dosis:          '',
+        via:            '',
+        duracion:       '',
+        // Evolución
+        evolucion:      '',
+        recomendaciones:'',
+        // Compra
+        tipoCompra:     '',
+        descCompra:     '',
+        montoCompra:    '',
+        // Cliente PWA (si ya existe)
+        clienteId:      '',
+      });
+
+      // Si la mascota ya tiene clienteId en la lista de clientes, pre-seleccionarlo
+      React.useEffect(() => {
+        const match = clientes.find(c =>
+          c.nombreMascota?.toLowerCase() === cita.petName?.toLowerCase() ||
+          c.rut?.includes(cita.ownerName?.split(' ')[0] || '')
+        );
+        if (match) setFormData(f => ({ ...f, clienteId: match.clienteId }));
+      }, []);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!formData.veterinario.trim()) { alert('Ingresa el nombre del veterinario'); return; }
+        onSubmit(formData);
+      };
+
+      const tabStyle = (t) => `px-3 py-2 rounded-xl text-xs font-bold transition-all ${tab === t ? 'bg-emerald-600 text-white shadow' : 'bg-gray-100 text-gray-500'}`;
+
+      return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Tabs de sección */}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            <button type="button" className={tabStyle('visita')}     onClick={() => setTab('visita')}>🏥 Visita *</button>
+            <button type="button" className={tabStyle('diagnostico')} onClick={() => setTab('diagnostico')}>📋 Diagnóstico</button>
+            <button type="button" className={tabStyle('farmaco')}    onClick={() => setTab('farmaco')}>💊 Fármaco</button>
+            <button type="button" className={tabStyle('evolucion')}  onClick={() => setTab('evolucion')}>📈 Evolución</button>
+            <button type="button" className={tabStyle('compra')}     onClick={() => setTab('compra')}>🛒 Cobro</button>
+          </div>
+
+          {/* ── VISITA ── */}
+          {tab === 'visita' && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Vincular a cliente PWA (opcional)</label>
+                <select value={formData.clienteId}
+                  onChange={e => setFormData({...formData, clienteId: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+                  <option value="">-- Sin vincular --</option>
+                  {clientes.map(c => <option key={c.id} value={c.clienteId}>{c.nombreMascota} ({c.raza}) - {c.nombreDueno}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Fecha *</label>
+                <input type="date" required value={formData.fecha}
+                  onChange={e => setFormData({...formData, fecha: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Motivo *</label>
+                <input type="text" required value={formData.motivo}
+                  onChange={e => setFormData({...formData, motivo: e.target.value})}
+                  placeholder="Control, vacunación, urgencia..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Veterinario *</label>
+                <input type="text" required value={formData.veterinario}
+                  onChange={e => setFormData({...formData, veterinario: e.target.value})}
+                  placeholder="Nombre del veterinario"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Observaciones</label>
+                <textarea rows={3} value={formData.observaciones}
+                  onChange={e => setFormData({...formData, observaciones: e.target.value})}
+                  placeholder="Observaciones generales de la visita..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+            </div>
+          )}
+
+          {/* ── DIAGNÓSTICO ── */}
+          {tab === 'diagnostico' && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500 bg-blue-50 rounded-lg p-2">Opcional: deja en blanco si no aplica</p>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Diagnóstico</label>
+                <textarea rows={3} value={formData.diagnostico}
+                  onChange={e => setFormData({...formData, diagnostico: e.target.value})}
+                  placeholder="Descripción del diagnóstico clínico..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Notas adicionales</label>
+                <textarea rows={2} value={formData.notasDiag}
+                  onChange={e => setFormData({...formData, notasDiag: e.target.value})}
+                  placeholder="Notas adicionales del diagnóstico..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+          )}
+
+          {/* ── FÁRMACO ── */}
+          {tab === 'farmaco' && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500 bg-purple-50 rounded-lg p-2">Opcional: deja en blanco si no aplica</p>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Fármaco / Medicamento</label>
+                <input type="text" value={formData.farmaco}
+                  onChange={e => setFormData({...formData, farmaco: e.target.value})}
+                  placeholder="Nombre del medicamento"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Dosis</label>
+                  <input type="text" value={formData.dosis}
+                    onChange={e => setFormData({...formData, dosis: e.target.value})}
+                    placeholder="5mg/kg"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Vía</label>
+                  <select value={formData.via}
+                    onChange={e => setFormData({...formData, via: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <option value="">Seleccionar</option>
+                    <option>Oral</option><option>IV</option><option>SC</option>
+                    <option>IM</option><option>Tópica</option><option>Ocular</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Duración</label>
+                <input type="text" value={formData.duracion}
+                  onChange={e => setFormData({...formData, duracion: e.target.value})}
+                  placeholder="7 días, 1 mes..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+              </div>
+            </div>
+          )}
+
+          {/* ── EVOLUCIÓN ── */}
+          {tab === 'evolucion' && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500 bg-green-50 rounded-lg p-2">Opcional: deja en blanco si no aplica</p>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Descripción de la Evolución</label>
+                <textarea rows={3} value={formData.evolucion}
+                  onChange={e => setFormData({...formData, evolucion: e.target.value})}
+                  placeholder="Evolución del paciente..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Recomendaciones</label>
+                <textarea rows={2} value={formData.recomendaciones}
+                  onChange={e => setFormData({...formData, recomendaciones: e.target.value})}
+                  placeholder="Cuidados y recomendaciones..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+            </div>
+          )}
+
+          {/* ── COBRO ── */}
+          {tab === 'compra' && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500 bg-amber-50 rounded-lg p-2">Opcional: deja en blanco si no aplica</p>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Tipo de Cobro</label>
+                <select value={formData.tipoCompra}
+                  onChange={e => setFormData({...formData, tipoCompra: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                  <option value="">Seleccionar...</option>
+                  <option>Consulta</option><option>Vacuna</option><option>Medicamento</option>
+                  <option>Examen</option><option>Procedimiento</option><option>Insumo</option><option>Otro</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Descripción</label>
+                <input type="text" value={formData.descCompra}
+                  onChange={e => setFormData({...formData, descCompra: e.target.value})}
+                  placeholder="Descripción del cobro"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Monto (CLP)</label>
+                <input type="number" min="0" value={formData.montoCompra}
+                  onChange={e => setFormData({...formData, montoCompra: e.target.value})}
+                  placeholder="25000"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                {formData.montoCompra > 0 && (
+                  <p className="text-xs text-amber-600 mt-1">💡 Acumula {Math.floor(Number(formData.montoCompra)/1000)} puntos</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <button type="submit"
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-4 rounded-2xl font-bold shadow-lg text-base flex items-center justify-center gap-2">
+            <Icon name="checkCircle" size={20} />
+            Guardar y Marcar como Realizada
+          </button>
+        </form>
+      );
+    };
+
+
+    const ClienteForm = ({ onSubmit, initialData = null }) => {
+      const [formData, setFormData] = useState(
+        initialData || {
+          rut: '',
+          nombreDueno: '',
+          telefono: '',
+          nombreMascota: '',
+          especie: '',
+          raza: '',
+          edad: ''
+        }
+      );
+
+      const handleRutChange = (e) => {
+        const valor = e.target.value;
+        const rutFormateado = formatRut(valor);
+        setFormData({ ...formData, rut: rutFormateado });
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!validarRut(formData.rut)) {
+          alert('El RUT ingresado no es válido. Por favor verifica el número.');
+          return;
+        }
+        onSubmit(formData);
+      };
+
+      return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">RUT Tutor *</label>
+            <input
+              type="text"
+              required
+              value={formData.rut}
+              onChange={handleRutChange}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="12.345.678-9"
+              maxLength="12"
+            />
+            <p className="text-xs text-gray-500 mt-1">Formato: 12.345.678-9</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Nombre del Tutor *</label>
+            <input
+              type="text"
+              required
+              value={formData.nombreDueno}
+              onChange={(e) => setFormData({ ...formData, nombreDueno: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Juan Pérez"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Teléfono *</label>
+            <input
+              type="text"
+              required
+              pattern="\+569\d{8}"
+              value={formData.telefono}
+              onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="+569XXXXXXXX"
+              title="Formato requerido: +569XXXXXXXX"
+            />
+            <p className="text-xs text-gray-500 mt-1">Formato: +569XXXXXXXX</p>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="font-bold text-gray-700 mb-3">🐾 Datos de la Mascota</h3>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Nombre de la Mascota *</label>
+            <input
+              type="text"
+              required
+              value={formData.nombreMascota}
+              onChange={(e) => setFormData({ ...formData, nombreMascota: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Firulais"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Especie *</label>
+            <select
+              required
+              value={formData.especie}
+              onChange={(e) => setFormData({ ...formData, especie: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">Seleccionar...</option>
+              <option value="Perro">Perro</option>
+              <option value="Gato">Gato</option>
+              <option value="Conejo">Conejo</option>
+              <option value="Ave">Ave</option>
+              <option value="Reptil">Reptil</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Raza *</label>
+            <input
+              type="text"
+              required
+              value={formData.raza}
+              onChange={(e) => setFormData({ ...formData, raza: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Ej: Labrador, Mestizo, Siamés"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Edad *</label>
+            <input
+              type="text"
+              required
+              value={formData.edad}
+              onChange={(e) => setFormData({ ...formData, edad: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Ej: 3 años, 6 meses, 2 años 4 meses"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 rounded-xl font-bold shadow-lg hover:from-emerald-700 hover:to-teal-700 transition-all"
+          >
+            {initialData ? 'Actualizar Cliente' : 'Guardar Cliente'}
+          </button>
+        </form>
+
+      );
+    };
+
+
+    /* ===========================
+       FORMULARIO: VISITA (SIN WhatsApp)
+       =========================== */
+    const VisitaForm = ({ clientes, onSubmit /* , enviarWhatsApp (no se usa en Visita) */ }) => {
+      const [formData, setFormData] = useState({
+        clienteId: '',
+        fecha: new Date().toISOString().split('T')[0],
+        motivo: '',
+        veterinario: '',
+        observaciones: ''
+      });
+
+      return (
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Mascota *</label>
+            <select
+              required
+              value={formData.clienteId}
+              onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">Seleccionar...</option>
+              {clientes.map(c => (
+                <option key={c.id} value={c.clienteId}>{c.nombreMascota} ({c.raza}) - {c.nombreDueno}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Fecha *</label>
+            <input
+              type="date"
+              required
+              value={formData.fecha}
+              onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Motivo *</label>
+            <input
+              type="text"
+              required
+              value={formData.motivo}
+              onChange={(e) => setFormData({ ...formData, motivo: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Control, Vacunación..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Veterinario *</label>
+            <input
+              type="text"
+              required
+              value={formData.veterinario}
+              onChange={(e) => setFormData({ ...formData, veterinario: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Dr. García"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Observaciones</label>
+            <textarea
+              value={formData.observaciones}
+              onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              rows="3"
+            />
+          </div>
+
+          <button type="submit" className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 rounded-xl font-bold shadow-lg">
+            Guardar Visita
+          </button>
+        </form>
+      );
+    };
+
+
+    /* ===========================
+       FORMULARIO: DIAGNÓSTICO (con WhatsApp)
+       =========================== */
+    const DiagnosticoForm = ({ clientes, onSubmit, enviarWhatsApp }) => {
+      const [formData, setFormData] = useState({
+        clienteId: '',
+        fecha: new Date().toISOString().split('T')[0],
+        diagnostico: '',
+        veterinario: '',
+        notas: ''
+      });
+
+      const handleEnviarWhatsApp = () => {
+        enviarWhatsApp?.(formData);
+      };
+
+      return (
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Mascota *</label>
+            <select
+              required
+              value={formData.clienteId}
+              onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar...</option>
+              {clientes.map(c => <option key={c.id} value={c.clienteId}>{c.nombreMascota} ({c.raza}) - {c.nombreDueno}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Fecha *</label>
+            <input
+              type="date"
+              required
+              value={formData.fecha}
+              onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Diagnóstico *</label>
+            <input
+              type="text"
+              required
+              value={formData.diagnostico}
+              onChange={(e) => setFormData({ ...formData, diagnostico: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Gastroenteritis aguda"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Veterinario *</label>
+            <input
+              type="text"
+              required
+              value={formData.veterinario}
+              onChange={(e) => setFormData({ ...formData, veterinario: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Dr. García"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Notas</label>
+            <textarea
+              value={formData.notas}
+              onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows="3"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit" className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-xl font-bold shadow-lg">
+              Guardar Diagnóstico
+            </button>
+            <button type="button" onClick={handleEnviarWhatsApp} className="px-4 bg-green-500 rounded-xl text-white shadow-md flex items-center justify-center">
+              <Icon name="whatsapp" size={24} />
+            </button>
+          </div>
+        </form>
+      );
+    };
+
+
+    /* ===========================
+       FORMULARIO: FÁRMACO (con WhatsApp)
+       =========================== */
+    const FarmacoForm = ({ clientes, onSubmit, enviarWhatsApp }) => {
+      const [formData, setFormData] = useState({
+        clienteId: '',
+        fecha: new Date().toISOString().split('T')[0],
+        farmaco: '',
+        dosis: '',
+        via: '',
+        duracion: '',
+        veterinario: ''
+      });
+
+      const handleEnviarWhatsApp = () => {
+        enviarWhatsApp?.(formData);
+      };
+
+      return (
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Mascota *</label>
+            <select
+              required
+              value={formData.clienteId}
+              onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="">Seleccionar...</option>
+              {clientes.map(c => <option key={c.id} value={c.clienteId}>{c.nombreMascota} ({c.raza}) - {c.nombreDueno}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Fecha *</label>
+            <input
+              type="date"
+              required
+              value={formData.fecha}
+              onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Fármaco *</label>
+            <input
+              type="text"
+              required
+              value={formData.farmaco}
+              onChange={(e) => setFormData({ ...formData, farmaco: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Nombre del medicamento"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Dosis *</label>
+            <input
+              type="text"
+              required
+              value={formData.dosis}
+              onChange={(e) => setFormData({ ...formData, dosis: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="10mg cada 12h"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Vía *</label>
+            <select
+              required
+              value={formData.via}
+              onChange={(e) => setFormData({ ...formData, via: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="">Seleccionar...</option>
+              <option value="Oral">Oral</option>
+              <option value="Inyectable">Inyectable</option>
+              <option value="Tópica">Tópica</option>
+              <option value="Intravenosa">Intravenosa</option>
+              <option value="Subcutánea">Subcutánea</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Duración *</label>
+            <input
+              type="text"
+              required
+              value={formData.duracion}
+              onChange={(e) => setFormData({ ...formData, duracion: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="7 días"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Veterinario *</label>
+            <input
+              type="text"
+              required
+              value={formData.veterinario}
+              onChange={(e) => setFormData({ ...formData, veterinario: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Dr. García"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit" className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white py-3 rounded-xl font-bold shadow-lg">
+              Guardar Fármaco
+            </button>
+            <button type="button" onClick={handleEnviarWhatsApp} className="px-4 bg-green-500 rounded-xl text-white shadow-md flex items-center justify-center">
+              <Icon name="whatsapp" size={24} />
+            </button>
+          </div>
+        </form>
+      );
+    };
+
+
+    /* ===========================
+       FORMULARIO: EVOLUCIÓN (con WhatsApp)
+       =========================== */
+    const EvolucionForm = ({ clientes, onSubmit, enviarWhatsApp }) => {
+      const [formData, setFormData] = useState({
+        clienteId: '',
+        fecha: new Date().toISOString().split('T')[0],
+        descripcion: '',
+        veterinario: '',
+        recomendaciones: ''
+      });
+
+      const handleEnviarWhatsApp = () => {
+        enviarWhatsApp?.(formData);
+      };
+
+      return (
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Mascota *</label>
+            <select
+              required
+              value={formData.clienteId}
+              onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="">Seleccionar...</option>
+              {clientes.map(c => <option key={c.id} value={c.clienteId}>{c.nombreMascota} ({c.raza}) - {c.nombreDueno}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Fecha *</label>
+            <input
+              type="date"
+              required
+              value={formData.fecha}
+              onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Descripción *</label>
+            <textarea
+              required
+              value={formData.descripcion}
+              onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+              rows="3"
+              placeholder="Estado del paciente..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Veterinario *</label>
+            <input
+              type="text"
+              required
+              value={formData.veterinario}
+              onChange={(e) => setFormData({ ...formData, veterinario: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+              placeholder="Dr. García"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Recomendaciones</label>
+            <textarea
+              value={formData.recomendaciones}
+              onChange={(e) => setFormData({ ...formData, recomendaciones: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+              rows="2"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit" className="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-xl font-bold shadow-lg">
+              Guardar Evolución
+            </button>
+            <button type="button" onClick={handleEnviarWhatsApp} className="px-4 bg-green-500 rounded-xl text-white shadow-md flex items-center justify-center">
+              <Icon name="whatsapp" size={24} />
+            </button>
+          </div>
+        </form>
+      );
+    };
+
+
+    /* ===========================
+       FORMULARIO: COMPRA (con WhatsApp)
+       =========================== */
+    const CompraForm = ({ clientes, onSubmit, enviarWhatsApp }) => {
+      const [formData, setFormData] = useState({
+        clienteId: '',
+        fecha: new Date().toISOString().split('T')[0],
+        tipo: '',
+        descripcion: '',
+        monto: 0
+      });
+
+      const handleEnviarWhatsApp = () => {
+        enviarWhatsApp?.(formData);
+      };
+
+      return (
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Mascota *</label>
+            <select
+              required
+              value={formData.clienteId}
+              onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="">Seleccionar...</option>
+              {clientes.map(c => <option key={c.id} value={c.clienteId}>{c.nombreMascota} ({c.raza}) - {c.nombreDueno}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Fecha *</label>
+            <input
+              type="date"
+              required
+              value={formData.fecha}
+              onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Tipo *</label>
+            <select
+              required
+              value={formData.tipo}
+              onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="">Seleccionar...</option>
+              <option value="Medicamento">Medicamento</option>
+              <option value="Alimento">Alimento</option>
+              <option value="Accesorio">Accesorio</option>
+              <option value="Servicio">Servicio</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Descripción *</label>
+            <input
+              type="text"
+              required
+              value={formData.descripcion}
+              onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Monto (CLP) *</label>
+            <input
+              type="number"
+              min="0"
+              required
+              value={formData.monto}
+              onChange={(e) => setFormData({ ...formData, monto: Number(e.target.value) })}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              placeholder="15000"
+            />
+            <p className="text-sm text-amber-600 mt-1">
+              💡 Se acumulan {Math.floor((formData.monto || 0) / 1000)} puntos (1 punto = $1.000)
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit" className="flex-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white py-3 rounded-xl font-bold shadow-lg">
+              Registrar Compra
+            </button>
+            <button type="button" onClick={handleEnviarWhatsApp} className="px-4 bg-green-500 rounded-xl text-white shadow-md flex items-center justify-center">
+              <Icon name="whatsapp" size={24} />
+            </button>
+          </div>
+        </form>
+      );
+    };
+/* ===========================
+       MONTAJE FINAL
+       =========================== */
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(() => console.log('✅ Service Worker activado y PWA instalable'))
+          .catch(err => console.error('❌ Error SW:', err));
+      });
+    }
+  </script>
+
+  <script>
+    let deferredPrompt;
+
+    // 1. Escuchamos si el navegador dice que la app es instalable
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault(); 
+      deferredPrompt = e; 
+      
+      const btn = document.getElementById('installButton');
+      if (btn) btn.classList.remove('hidden'); 
+    });
+
+    // 2. Escuchamos el clic en el botón para instalar
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('#installButton');
+      
+      if (btn && deferredPrompt) {
+        deferredPrompt.prompt(); 
+        const { outcome } = await deferredPrompt.userChoice;
+        
+        console.log(`El usuario eligió: ${outcome}`);
+        deferredPrompt = null; 
+        btn.classList.add('hidden'); 
+      }
+    });
+
+    // 3. Ocultar botón si ya se instaló
+    window.addEventListener('appinstalled', () => {
+      const btn = document.getElementById('installButton');
+      if (btn) btn.classList.add('hidden');
+      console.log('🐾 ¡Manada Patitas fue instalada con éxito!');
+    });
+  </script>
+</body>
+</html>
