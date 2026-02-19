@@ -288,14 +288,15 @@
     };
 
     /* ── Guardar un registro individual en Sheets ── */
+/* ── Guardar un registro individual en Sheets (Usando URLSearchParams para evitar CORS) ── */
     const savePWARecord = async (tipo, record) => {
       try {
-        const res = await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          // ⚠️ TRUCO CORS: text/plain permite que pase sin bloqueo
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'savePWARecord', tipo, record })
-        });
+        const params = new URLSearchParams();
+        params.append('action', 'savePWARecord');
+        params.append('tipo', tipo);
+        params.append('record', JSON.stringify(record));
+
+        const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
         const json = await res.json();
         return json.success;
       } catch { return false; }
@@ -316,7 +317,6 @@
         const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAll`);
         const json = await res.json();
         if (json.appointments) {
-          // Extraemos las pendientes y les aplicamos el formato de fecha de inmediato
           return json.appointments
             .filter(c => c.status === 'Pendiente')
             .map(c => ({ ...c, date: formatFechaCL(c.date) }));
@@ -328,11 +328,11 @@
     /* ── Actualizar estado de cita en Sheets ── */
     const updateCitaStatus = async (id, status) => {
       try {
-        const res = await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'update', appointment: { id, status } })
-        });
+        const params = new URLSearchParams();
+        params.append('action', 'update');
+        params.append('appointment', JSON.stringify({ id, status }));
+
+        const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
         const json = await res.json();
         return json.success;
       } catch { return false; }
@@ -341,17 +341,18 @@
     /* ── Actualizar puntos de cliente ── */
     const updatePuntosSheets = async (clienteId, puntos) => {
       try {
-        await fetch(GOOGLE_SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'updatePuntos', clienteId, puntos })
-        });
+        const params = new URLSearchParams();
+        params.append('action', 'updatePuntos');
+        params.append('clienteId', clienteId);
+        params.append('puntos', puntos);
+
+        await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
       } catch {}
     };
 
     const generateId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    /* ===========================
+/* ===========================
        APP
        =========================== */
     const App = () => {
@@ -369,32 +370,29 @@
       const [agenda, setAgenda] = useState([]);
       const [loadingAgenda, setLoadingAgenda] = useState(false);
       const [saving, setSaving] = useState(false);
-
-      useEffect(() => { loadData(); loadAgenda(); }, []);
-
-     // ✅ Variable para rastrear la cantidad de citas y lanzar notificaciones
       const [cantidadCitas, setCantidadCitas] = useState(0);
 
+      // 1. Efecto inicial: Cargar datos y pedir permisos
       useEffect(() => {
-        // 1. Pedir permiso de notificaciones
         if ("Notification" in window && Notification.permission !== "granted") {
             Notification.requestPermission();
         }
         
-        // 2. Cargar datos iniciales
         loadData(); 
         loadAgenda();
 
-        // 3. Revisar la agenda automáticamente cada 1 minuto (60000ms)
+        // Revisar la agenda automáticamente cada 1 minuto
         const interval = setInterval(() => {
             loadAgenda();
         }, 60000);
 
-        return () => clearInterval(interval); // Limpiar al salir
+        return () => clearInterval(interval);
       }, []);
 
+      // 2. Función para cargar datos
       const loadData = async () => {
         setLoading(true);
+   
         // Mostrar datos locales inmediatamente (soporte offline)
         try {
           const setters = [
