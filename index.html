@@ -273,34 +273,42 @@
         }
 
 /* ════════════════════════════════════════════════════════
-       GOOGLE SHEETS INTEGRATION (PWA PANEL)
+       GOOGLE SHEETS INTEGRATION
        ════════════════════════════════════════════════════════ */
     const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwBqUDjZQGU-l3gvY1cS7896OPAYztUIge_vS-TsDY0JwvkjBwAlJdXNPloIH38vHwe4w/exec';
 
-    /* ── Formateadores de Fecha y Hora (Limpian el formato de Sheets) ── */
-    const formatFechaCL = (fechaString) => {
-      if (!fechaString) return "Sin fecha";
-      // Si viene con formato raro de Google (GMT o T)
-      if (fechaString.includes('GMT') || fechaString.includes('T')) {
+    /* ── Formateadores (Limpian la "basura" de Google y estandarizan a AAAA-MM-DD) ── */
+    const parsearFechaSheets = (fechaString) => {
+      if (!fechaString) return "";
+      if (typeof fechaString !== 'string') return fechaString;
+      
+      // 1. Limpiamos el texto extra "(hora de verano...)" que confunde a los celulares
+      let limpia = fechaString.replace(/\s*\(.*?\)\s*/g, '');
+      
+      // 2. Si viene larga con GMT, la convertimos al estándar AAAA-MM-DD
+      if (limpia.includes('GMT') || limpia.includes('T')) {
           try {
-            const date = new Date(fechaString);
-            const day = String(date.getDate()).padStart(2, '0');
+            const date = new Date(limpia);
+            if (isNaN(date)) return fechaString;
+            const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
-            return `${day}/${month}/${date.getFullYear()}`;
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`; 
           } catch (e) { return fechaString; }
       }
-      // Si viene normal YYYY-MM-DD
-      const partes = fechaString.split('-');
-      if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
       return fechaString;
     };
 
     const formatHoraCL = (horaString) => {
       if (!horaString) return "";
-      // Google Sheets manda las horas como el año 1899. Esto lo limpia:
-      if (horaString.includes('1899') || horaString.includes('GMT') || horaString.includes('T')) {
+      if (typeof horaString !== 'string') return horaString;
+      
+      // Limpiamos también la hora de "1899"
+      let limpia = horaString.replace(/\s*\(.*?\)\s*/g, '');
+      if (limpia.includes('1899') || limpia.includes('GMT') || limpia.includes('T')) {
           try {
-            const date = new Date(horaString);
+            const date = new Date(limpia);
+            if(isNaN(date)) return horaString;
             const h = String(date.getHours()).padStart(2, '0');
             const m = String(date.getMinutes()).padStart(2, '0');
             return `${h}:${m}`;
@@ -309,14 +317,14 @@
       return horaString;
     };
 
-    /* ── POST: Guardar registros en Sheets ── */
+    /* ── POST: Guardar registro en Sheets ── */
     const savePWARecord = async (tipo, record) => {
       try {
-        const params = new URLSearchParams();
-        params.append('action', 'savePWARecord');
-        params.append('tipo', tipo);
-        params.append('record', JSON.stringify(record));
-        const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'savePWARecord', tipo, record })
+        });
         const json = await res.json();
         return json.success;
       } catch { return false; }
@@ -331,7 +339,7 @@
       } catch { return null; }
     };
 
-    /* ── GET: Cargar agenda (Limpia las fechas feas aquí) ── */
+    /* ── GET: Cargar agenda (Aplica los filtros mágicos aquí) ── */
     const loadAgendaFromSheets = async () => {
       try {
         const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAll`);
@@ -341,8 +349,8 @@
             .filter(c => c.status === 'Pendiente')
             .map(c => ({ 
                 ...c, 
-                date: formatFechaCL(c.date),
-                time: formatHoraCL(c.time) // Aplica el filtro de la hora 1899
+                date: parsearFechaSheets(c.date), // <--- Ahora devuelve AAAA-MM-DD limpio
+                time: formatHoraCL(c.time)        // <--- Devuelve la hora limpia
             }));
         }
         return [];
@@ -352,10 +360,11 @@
     /* ── POST: Actualizar estado de cita ── */
     const updateCitaStatus = async (id, status) => {
       try {
-        const params = new URLSearchParams();
-        params.append('action', 'update');
-        params.append('appointment', JSON.stringify({ id, status }));
-        const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'update', appointment: { id, status } })
+        });
         const json = await res.json();
         return json.success;
       } catch { return false; }
@@ -364,11 +373,11 @@
     /* ── POST: Actualizar puntos de cliente ── */
     const updatePuntosSheets = async (clienteId, puntos) => {
       try {
-        const params = new URLSearchParams();
-        params.append('action', 'updatePuntos');
-        params.append('clienteId', clienteId);
-        params.append('puntos', puntos);
-        await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
+        const res = await fetch(GOOGLE_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'updatePuntos', clienteId, puntos })
+        });
       } catch {}
     };
 
