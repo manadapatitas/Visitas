@@ -272,37 +272,57 @@
             return `${dia} de ${mes} de ${año}`;
         }
 
-    /* ════════════════════════════════════════════════════════
-       GOOGLE SHEETS INTEGRATION
-       URL compartida con el Sistema de Agendamiento
+/* ════════════════════════════════════════════════════════
+       GOOGLE SHEETS INTEGRATION (PWA PANEL)
        ════════════════════════════════════════════════════════ */
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwBqUDjZQGU-l3gvY1cS7896OPAYztUIge_vS-TsDY0JwvkjBwAlJdXNPloIH38vHwe4w/exec';
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjrMKzJynF_xpIzM84ToDf9B9s2RcN-Yd2_qD-WjNMBMX-IrFBYhya_upQxZKSelkBNg/exec';
 
-    /* ── Guardar un registro individual en Sheets ── */
-/* ── Formateador de Fecha a DD/MM/AAAA ── */
+    /* ── Formateadores de Fecha y Hora (Limpian el formato de Sheets) ── */
     const formatFechaCL = (fechaString) => {
       if (!fechaString) return "Sin fecha";
+      // Si viene con formato raro de Google (GMT o T)
+      if (fechaString.includes('GMT') || fechaString.includes('T')) {
+          try {
+            const date = new Date(fechaString);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            return `${day}/${month}/${date.getFullYear()}`;
+          } catch (e) { return fechaString; }
+      }
+      // Si viene normal YYYY-MM-DD
       const partes = fechaString.split('-');
       if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
       return fechaString;
     };
 
-    /* ── Guardar un registro individual en Sheets ── */
-/* ── Guardar un registro individual en Sheets (Usando URLSearchParams para evitar CORS) ── */
+    const formatHoraCL = (horaString) => {
+      if (!horaString) return "";
+      // Google Sheets manda las horas como el año 1899. Esto lo limpia:
+      if (horaString.includes('1899') || horaString.includes('GMT') || horaString.includes('T')) {
+          try {
+            const date = new Date(horaString);
+            const h = String(date.getHours()).padStart(2, '0');
+            const m = String(date.getMinutes()).padStart(2, '0');
+            return `${h}:${m}`;
+          } catch (e) { return horaString; }
+      }
+      return horaString;
+    };
+
+    /* ── POST: Guardar registros en Sheets ── */
     const savePWARecord = async (tipo, record) => {
       try {
         const params = new URLSearchParams();
         params.append('action', 'savePWARecord');
         params.append('tipo', tipo);
         params.append('record', JSON.stringify(record));
-
         const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
         const json = await res.json();
         return json.success;
       } catch { return false; }
     };
 
-    /* ── Cargar todos los registros de un tipo ── */
+    /* ── GET: Cargar registros (clientes, visitas, etc) ── */
     const loadPWAFromSheets = async (tipo) => {
       try {
         const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getPWAData&tipo=${tipo}`);
@@ -311,7 +331,7 @@
       } catch { return null; }
     };
 
-    /* ── Cargar citas PENDIENTES del agendamiento ── */
+    /* ── GET: Cargar agenda (Limpia las fechas feas aquí) ── */
     const loadAgendaFromSheets = async () => {
       try {
         const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAll`);
@@ -319,33 +339,35 @@
         if (json.appointments) {
           return json.appointments
             .filter(c => c.status === 'Pendiente')
-            .map(c => ({ ...c, date: formatFechaCL(c.date) }));
+            .map(c => ({ 
+                ...c, 
+                date: formatFechaCL(c.date),
+                time: formatHoraCL(c.time) // Aplica el filtro de la hora 1899
+            }));
         }
         return [];
       } catch { return []; }
     };
 
-    /* ── Actualizar estado de cita en Sheets ── */
+    /* ── POST: Actualizar estado de cita ── */
     const updateCitaStatus = async (id, status) => {
       try {
         const params = new URLSearchParams();
         params.append('action', 'update');
         params.append('appointment', JSON.stringify({ id, status }));
-
         const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
         const json = await res.json();
         return json.success;
       } catch { return false; }
     };
 
-    /* ── Actualizar puntos de cliente ── */
+    /* ── POST: Actualizar puntos de cliente ── */
     const updatePuntosSheets = async (clienteId, puntos) => {
       try {
         const params = new URLSearchParams();
         params.append('action', 'updatePuntos');
         params.append('clienteId', clienteId);
         params.append('puntos', puntos);
-
         await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: params });
       } catch {}
     };
