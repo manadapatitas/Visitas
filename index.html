@@ -480,43 +480,30 @@
         setLoadingAgenda(false);
       };
 
-      // Actualización local instantánea + sincronización Sheets
-      const saveClientes = async (data) => {
+// 1. Funciones de actualización exclusivamente local (RAM y caché)
+      const updateClientesLocal = (data) => {
         setClientes(data);
         localStorage.setItem('veterinaria_clientes', JSON.stringify(data));
-        // Solo persistir el último registro nuevo (más eficiente)
-        const ultimo = data[data.length - 1];
-        if (ultimo) await savePWARecord('clientes', ultimo);
       };
-      const saveVisitas = async (data) => {
+      const updateVisitasLocal = (data) => {
         setVisitas(data);
         localStorage.setItem('veterinaria_visitas', JSON.stringify(data));
-        const ultimo = data[data.length - 1];
-        if (ultimo) await savePWARecord('visitas', ultimo);
       };
-      const saveDiagnosticos = async (data) => {
+      const updateDiagnosticosLocal = (data) => {
         setDiagnosticos(data);
         localStorage.setItem('veterinaria_diagnosticos', JSON.stringify(data));
-        const ultimo = data[data.length - 1];
-        if (ultimo) await savePWARecord('diagnosticos', ultimo);
       };
-      const saveFarmacos = async (data) => {
+      const updateFarmacosLocal = (data) => {
         setFarmacos(data);
         localStorage.setItem('veterinaria_farmacos', JSON.stringify(data));
-        const ultimo = data[data.length - 1];
-        if (ultimo) await savePWARecord('farmacos', ultimo);
       };
-      const saveEvoluciones = async (data) => {
+      const updateEvolucionesLocal = (data) => {
         setEvoluciones(data);
         localStorage.setItem('veterinaria_evoluciones', JSON.stringify(data));
-        const ultimo = data[data.length - 1];
-        if (ultimo) await savePWARecord('evoluciones', ultimo);
       };
-      const saveCompras = async (data) => {
+      const updateComprasLocal = (data) => {
         setCompras(data);
         localStorage.setItem('veterinaria_compras', JSON.stringify(data));
-        const ultimo = data[data.length - 1];
-        if (ultimo) await savePWARecord('compras', ultimo);
       };
 
       const filteredClientes = clientes.filter((c) => {
@@ -526,38 +513,48 @@
           .some(v => String(v).toLowerCase().includes(q));
       });
 
-      const addCliente = (cliente) => {
+      // 2. Funciones de creación: Actualizan local y envían a Sheets SOLO el nuevo registro
+      const addCliente = async (cliente) => {
         const id = generateId();
         const newCliente = { ...cliente, id, clienteId: id, puntos: 0, canjes: 0 };
-        saveClientes([...clientes, newCliente]);
+        updateClientesLocal([...clientes, newCliente]);
+        await savePWARecord('clientes', newCliente);
       };
-      const addVisita = (visita) => {
+      const addVisita = async (visita) => {
         const newVisita = { ...visita, id: generateId() };
-        saveVisitas([...visitas, newVisita]);
+        updateVisitasLocal([...visitas, newVisita]);
+        await savePWARecord('visitas', newVisita);
       };
-      const addDiagnostico = (diagnostico) => {
+      const addDiagnostico = async (diagnostico) => {
         const newDiag = { ...diagnostico, id: generateId() };
-        saveDiagnosticos([...diagnosticos, newDiag]);
+        updateDiagnosticosLocal([...diagnosticos, newDiag]);
+        await savePWARecord('diagnosticos', newDiag);
       };
-      const addFarmaco = (farmaco) => {
+      const addFarmaco = async (farmaco) => {
         const newFarm = { ...farmaco, id: generateId() };
-        saveFarmacos([...farmacos, newFarm]);
+        updateFarmacosLocal([...farmacos, newFarm]);
+        await savePWARecord('farmacos', newFarm);
       };
-      const addEvolucion = (evolucion) => {
+      const addEvolucion = async (evolucion) => {
         const newEvol = { ...evolucion, id: generateId() };
-        saveEvoluciones([...evoluciones, newEvol]);
+        updateEvolucionesLocal([...evoluciones, newEvol]);
+        await savePWARecord('evoluciones', newEvol);
       };
       const addCompra = async (compra) => {
         const newCompra = { ...compra, id: generateId(), fechaRegistro: new Date().toISOString() };
-        saveCompras([...compras, newCompra]);
+        updateComprasLocal([...compras, newCompra]);
+        await savePWARecord('compras', newCompra);
+
+        // Lógica de Puntos (Ya no duplica al cliente)
         const puntos = Math.floor((compra.monto || 0) / 1000);
-        const updatedClientes = clientes.map(c =>
-          c.clienteId === compra.clienteId ? { ...c, puntos: (c.puntos || 0) + puntos } : c
-        );
-        saveClientes(updatedClientes);
-        // Actualizar puntos en Sheets
-        const cliente = updatedClientes.find(c => c.clienteId === compra.clienteId);
-        if (cliente) await updatePuntosSheets(compra.clienteId, cliente.puntos);
+        if (puntos > 0) {
+            const updatedClientes = clientes.map(c =>
+              c.clienteId === compra.clienteId ? { ...c, puntos: (c.puntos || 0) + puntos } : c
+            );
+            updateClientesLocal(updatedClientes); // Solo actualiza pantalla local
+            const cliente = updatedClientes.find(c => c.clienteId === compra.clienteId);
+            if (cliente) await updatePuntosSheets(compra.clienteId, cliente.puntos);
+        }
       };
 
 
@@ -690,38 +687,23 @@
         return true;
       };
 
-      const deleteCliente = (clienteId) => {
-        // Confirmar antes de eliminar
+   const deleteCliente = (clienteId) => {
         const cliente = clientes.find(c => c.clienteId === clienteId);
         if (!cliente) return;
         
         const confirmacion = window.confirm(
           `¿Estás seguro de eliminar a ${cliente.nombreMascota} y todo su historial?\n\nEsta acción no se puede deshacer.`
         );
-        
         if (!confirmacion) return;
 
-        // Eliminar cliente
-        const nuevosClientes = clientes.filter(c => c.clienteId !== clienteId);
-        saveClientes(nuevosClientes);
+        updateClientesLocal(clientes.filter(c => c.clienteId !== clienteId));
+        updateVisitasLocal(visitas.filter(v => v.clienteId !== clienteId));
+        updateDiagnosticosLocal(diagnosticos.filter(d => d.clienteId !== clienteId));
+        updateFarmacosLocal(farmacos.filter(f => f.clienteId !== clienteId));
+        updateEvolucionesLocal(evoluciones.filter(e => e.clienteId !== clienteId));
+        updateComprasLocal(compras.filter(c => c.clienteId !== clienteId));
 
-        // Eliminar todo el historial del cliente
-        const nuevasVisitas = visitas.filter(v => v.clienteId !== clienteId);
-        saveVisitas(nuevasVisitas);
-
-        const nuevosDiagnosticos = diagnosticos.filter(d => d.clienteId !== clienteId);
-        saveDiagnosticos(nuevosDiagnosticos);
-
-        const nuevosFarmacos = farmacos.filter(f => f.clienteId !== clienteId);
-        saveFarmacos(nuevosFarmacos);
-
-        const nuevasEvoluciones = evoluciones.filter(e => e.clienteId !== clienteId);
-        saveEvoluciones(nuevasEvoluciones);
-
-        const nuevasCompras = compras.filter(c => c.clienteId !== clienteId);
-        saveCompras(nuevasCompras);
-
-        alert(`${cliente.nombreMascota} y su historial han sido eliminados.`);
+        alert(`${cliente.nombreMascota} y su historial han sido eliminados de tu pantalla.`);
       };
 
       const getHistorialCliente = (clienteId) => {
@@ -908,7 +890,7 @@
             </FormModal>
           )}
 
-          {showModal === 'editarCliente' && selectedClient && (
+{showModal === 'editarCliente' && selectedClient && (
             <FormModal title="Editar Cliente" onClose={() => setShowModal(null)}>
               <ClienteForm
                 initialData={selectedClient}
@@ -916,7 +898,7 @@
                   const updated = clientes.map(c =>
                     c.id === selectedClient.id ? { ...c, ...data } : c
                   );
-                  saveClientes(updated);
+                  updateClientesLocal(updated); // <-- Cambiamos saveClientes por updateClientesLocal
                   setShowModal(null);
                 }}
               />
