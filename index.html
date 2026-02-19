@@ -18,8 +18,8 @@
   <link rel="manifest" href="manifest.json">
   
   <!-- Icons para iOS -->
-  <link rel="apple-touch-icon" href="icon-192.svg">
-  <link rel="icon" type="image/svg+xml" href="icon-192.svg">
+<link rel="apple-touch-icon" href="icon-192x192.png">
+  <link rel="icon" type="image/jpeg" href="favicon.jpg">
   
   <title>Manada Patitas - Sistema Veterinario</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -64,7 +64,7 @@
     // Intentar registrar Service Worker solo si estamos en un servidor
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('service-worker.js')
+        navigator.serviceWorker.register('./service-worker.js')
           .then((registration) => {
             console.log('Service Worker registrado:', registration.scope);
           })
