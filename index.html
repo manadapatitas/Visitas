@@ -57,73 +57,7 @@
   <div id="root"></div>
 
   <!-- PWA Installation Script -->
-  <script>
-    // Intentar registrar Service Worker solo si estamos en un servidor
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js')
-          .then((registration) => {
-            console.log('Service Worker registrado:', registration.scope);
-          })
-          .catch((error) => {
-            console.log('Service Worker no disponible:', error);
-          });
-      });
-    }
-
-    const installButton = document.getElementById('installButton');
-    let deferredPrompt;
-    let installShown = false;
-
-    // Prompt de instalación
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      installButton.style.display = 'flex';
-      installShown = true;
-    });
-
-    installButton.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`Instalación: ${outcome}`);
-        deferredPrompt = null;
-        installButton.style.display = 'none';
-      }
-    });
-
-    window.addEventListener('appinstalled', () => {
-      console.log('PWA instalada');
-      installButton.style.display = 'none';
-    });
-
-    // Si después de 3 segundos no aparece el prompt, mostrar instrucciones
-    setTimeout(() => {
-      if (!installShown && installButton) {
-        // Cambiar el botón para mostrar instrucciones manuales
-        installButton.innerHTML = `
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="16" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12.01" y2="8"/>
-          </svg>
-          ¿Cómo instalar?
-        `;
-        installButton.style.display = 'flex';
-        installButton.style.background = 'linear-gradient(to right, #2563eb, #3b82f6)';
-        
-        installButton.onclick = () => {
-          alert('📱 CÓMO INSTALAR LA APP:\n\n' +
-                '1. Toca el menú (⋮) arriba a la derecha\n' +
-                '2. Busca "Instalar app" o "Añadir a pantalla de inicio"\n' +
-                '3. Confirma\n' +
-                '4. ¡Listo! Tendrás el icono 🐾 en tu pantalla\n\n' +
-                '💡 TRUCO: También puedes buscar el icono de casita con ➕ en la barra de direcciones');
-        };
-      }
-    }, 3000);
-  </script>
+ 
 
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -438,8 +372,7 @@
 
       useEffect(() => { loadData(); loadAgenda(); }, []);
 
-      const loadData = async () => {
-        // ✅ Variable para rastrear la cantidad de citas y lanzar notificaciones
+     // ✅ Variable para rastrear la cantidad de citas y lanzar notificaciones
       const [cantidadCitas, setCantidadCitas] = useState(0);
 
       useEffect(() => {
@@ -1079,10 +1012,7 @@
     }; // FIN DEL COMPONENTE APP
 
 
-    /* ===========================
-       BOTÓN EN TABS
-       =========================== */
-    const TabButton = ({ icon, label, active, onClick }) => (
+const TabButton = ({ icon, label, active, onClick }) => (
       <button
         onClick={onClick}
         className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
@@ -1093,7 +1023,7 @@
         <span className="text-xs mt-1 font-medium">{label}</span>
       </button>
     );
-``
+
 /* ===========================
        HOME TAB
        =========================== */
@@ -2569,8 +2499,7 @@
       });
     }
   </script>
-
-  <script>
+<script>
     let deferredPrompt;
 
     // 1. Escuchamos si el navegador dice que la app es instalable
@@ -2579,7 +2508,7 @@
       deferredPrompt = e; 
       
       const btn = document.getElementById('installButton');
-      if (btn) btn.classList.remove('hidden'); 
+      if (btn) btn.style.display = 'flex'; 
     });
 
     // 2. Escuchamos el clic en el botón para instalar
@@ -2592,16 +2521,17 @@
         
         console.log(`El usuario eligió: ${outcome}`);
         deferredPrompt = null; 
-        btn.classList.add('hidden'); 
+        btn.style.display = 'none'; 
       }
     });
 
     // 3. Ocultar botón si ya se instaló
     window.addEventListener('appinstalled', () => {
       const btn = document.getElementById('installButton');
-      if (btn) btn.classList.add('hidden');
+      if (btn) btn.style.display = 'none';
       console.log('🐾 ¡Manada Patitas fue instalada con éxito!');
     });
   </script>
+ 
 </body>
 </html>
