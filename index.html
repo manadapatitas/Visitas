@@ -2559,6 +2559,7 @@
        =========================== */
     ReactDOM.render(<App />, document.getElementById('root'));
   </script>
+
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -2568,7 +2569,8 @@
       });
     }
   </script>
-<script>
+
+  <script>
     let deferredPrompt;
 
     // 1. Escuchamos si el navegador dice que la app es instalable
@@ -2576,14 +2578,12 @@
       e.preventDefault(); 
       deferredPrompt = e; 
       
-      // Buscamos el botón "en vivo" para mostrarlo
       const btn = document.getElementById('installButton');
       if (btn) btn.classList.remove('hidden'); 
     });
 
-    // 2. Escuchamos los clics en toda la página, y si hacen clic en nuestro botón, instalamos
+    // 2. Escuchamos el clic en el botón para instalar
     document.addEventListener('click', async (e) => {
-      // Verificamos si el clic fue en el botón de instalar o en un elemento dentro de él
       const btn = e.target.closest('#installButton');
       
       if (btn && deferredPrompt) {
@@ -2592,11 +2592,11 @@
         
         console.log(`El usuario eligió: ${outcome}`);
         deferredPrompt = null; 
-        btn.classList.add('hidden'); // Volvemos a ocultar el botón
+        btn.classList.add('hidden'); 
       }
     });
 
-    // 3. Si la app se instaló con éxito, nos aseguramos de ocultar el botón
+    // 3. Ocultar botón si ya se instaló
     window.addEventListener('appinstalled', () => {
       const btn = document.getElementById('installButton');
       if (btn) btn.classList.add('hidden');
