@@ -1098,15 +1098,23 @@ const TabButton = ({ icon, label, active, onClick }) => (
               <Icon name="activity" className="mr-2 text-emerald-600" size={20} />
               Últimas visitas
             </h3>
-            {visitas.slice(-5).reverse().map(v => {
+{visitas.slice(-5).reverse().map(v => {
               const cliente = clientes.find(c => c.clienteId === v.clienteId);
+              
+              // Voltear fecha a DD/MM/AAAA para mostrarla bonita
+              let fechaVisual = v.fecha;
+              if (fechaVisual && fechaVisual.includes('-')) {
+                  const partes = fechaVisual.split('-');
+                  if (partes.length === 3) fechaVisual = `${partes[2]}/${partes[1]}/${partes[0]}`;
+              }
+
               return (
                 <div key={v.id} className="py-3 border-b border-gray-100 last:border-0">
                   <p className="font-semibold text-gray-800">
-                    {cliente?.nombreMascota || 'Desconocido'}
+                    {v.petName || cliente?.nombreMascota || 'Desconocido'}
                   </p>
                   <p className="text-sm text-gray-600">
-                    {v.fecha} - {v.motivo}
+                    {fechaVisual} - {v.motivo}
                   </p>
                 </div>
               );
@@ -1244,16 +1252,24 @@ const TabButton = ({ icon, label, active, onClick }) => (
 
           <div className="space-y-3 mt-6">
             <h3 className="font-bold text-gray-800 text-lg">Visitas Recientes</h3>
-            {visitas.slice(-10).reverse().map(visita => {
+{visitas.slice(-10).reverse().map(visita => {
               const cliente = clientes.find(c => c.clienteId === visita.clienteId);
+              
+              // Voltear fecha a DD/MM/AAAA para mostrarla bonita
+              let fechaVisual = visita.fecha;
+              if (fechaVisual && fechaVisual.includes('-')) {
+                  const partes = fechaVisual.split('-');
+                  if (partes.length === 3) fechaVisual = `${partes[2]}/${partes[1]}/${partes[0]}`;
+              }
+
               return (
                 <div key={visita.id} className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="font-bold text-gray-800">
-                      {cliente?.nombreMascota || 'Desconocido'}
+                      {visita.petName || cliente?.nombreMascota || 'Desconocido'}
                     </h4>
-                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
-                      {visita.fecha}
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-semibold">
+                      {fechaVisual}
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 mb-1">
