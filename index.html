@@ -2568,43 +2568,38 @@
       });
     }
   </script>
-  <script>
+<script>
     let deferredPrompt;
-    const installButton = document.getElementById('installButton');
 
-    // 1. Ocultamos el botón al inicio (hasta saber si el teléfono es compatible)
-    if (installButton) {
-        installButton.style.display = 'none';
-    }
-
-    // 2. El navegador avisa que la app se puede instalar
+    // 1. Escuchamos si el navegador dice que la app es instalable
     window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault(); // Evita que el navegador muestre su propio aviso feo
-      deferredPrompt = e; // Guardamos el evento para usarlo al hacer clic
+      e.preventDefault(); 
+      deferredPrompt = e; 
       
-      // Mostramos nuestro botón bonito
-      if (installButton) {
-          installButton.style.display = 'flex';
+      // Buscamos el botón "en vivo" para mostrarlo
+      const btn = document.getElementById('installButton');
+      if (btn) btn.classList.remove('hidden'); 
+    });
+
+    // 2. Escuchamos los clics en toda la página, y si hacen clic en nuestro botón, instalamos
+    document.addEventListener('click', async (e) => {
+      // Verificamos si el clic fue en el botón de instalar o en un elemento dentro de él
+      const btn = e.target.closest('#installButton');
+      
+      if (btn && deferredPrompt) {
+        deferredPrompt.prompt(); 
+        const { outcome } = await deferredPrompt.userChoice;
+        
+        console.log(`El usuario eligió: ${outcome}`);
+        deferredPrompt = null; 
+        btn.classList.add('hidden'); // Volvemos a ocultar el botón
       }
     });
 
-    // 3. Qué pasa cuando hacemos clic en el botón
-    if (installButton) {
-        installButton.addEventListener('click', async () => {
-          if (!deferredPrompt) return;
-          
-          deferredPrompt.prompt(); // Muestra el cartel de instalación del teléfono
-          const { outcome } = await deferredPrompt.userChoice;
-          
-          console.log(`El usuario eligió: ${outcome}`);
-          deferredPrompt = null; // Limpiamos la variable
-          installButton.style.display = 'none'; // Ocultamos el botón tras elegir
-        });
-    }
-
-    // 4. Si la app ya está instalada, nos aseguramos de que el botón no aparezca
+    // 3. Si la app se instaló con éxito, nos aseguramos de ocultar el botón
     window.addEventListener('appinstalled', () => {
-      if (installButton) installButton.style.display = 'none';
+      const btn = document.getElementById('installButton');
+      if (btn) btn.classList.add('hidden');
       console.log('🐾 ¡Manada Patitas fue instalada con éxito!');
     });
   </script>
