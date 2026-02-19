@@ -318,7 +318,28 @@
       dvEsperado = dvEsperado === 11 ? '0' : dvEsperado === 10 ? 'K' : String(dvEsperado);
       return dv === dvEsperado;
     };
-
+        // Formatear fecha para mostrar (ej: "17 de febrero de 2026")
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Sin fecha';
+            
+            // Si viene como string "2026-02-17", parsearlo
+            const date = new Date(dateStr);
+            
+            if (isNaN(date.getTime())) {
+                return dateStr; // Retornar original si no se puede parsear
+            }
+            
+            const meses = [
+                'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+            ];
+            
+            const dia = date.getDate();
+            const mes = meses[date.getMonth()];
+            const año = date.getFullYear();
+            
+            return `${dia} de ${mes} de ${año}`;
+        }
 
     /* ════════════════════════════════════════════════════════
        GOOGLE SHEETS INTEGRATION
