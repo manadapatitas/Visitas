@@ -14,14 +14,11 @@
   <meta name="theme-color" content="#059669">
   <meta name="description" content="Sistema de gestión veterinaria a domicilio - Manada Patitas">
   
-  <!-- Manifest -->
-  <link rel="manifest" href="manifest.json">
-  
-  <!-- Icons para iOS -->
-<link rel="apple-touch-icon" href="icon-192x192.png">
-  <link rel="icon" type="image/jpeg" href="favicon.jpg">
-  
-  <title>Manada Patitas - Sistema Veterinario</title>
+<title>Manada Patitas - Sistema Veterinario</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/jpeg" href="favicon.jpg">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+   
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { -webkit-tap-highlight-color: transparent; }
@@ -345,14 +342,24 @@
        GOOGLE SHEETS INTEGRATION
        URL compartida con el Sistema de Agendamiento
        ════════════════════════════════════════════════════════ */
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3GRBhSxLwR5UL5N8jVQwjsasgl6r5nunwcXPTmJbiMqKyaw81fqP-lKP-ybzPQLF3kQ/exec';
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjrMKzJynF_xpIzM84ToDf9B9s2RcN-Yd2_qD-WjNMBMX-IrFBYhya_upQxZKSelkBNg/exec';
+
+    /* ── Guardar un registro individual en Sheets ── */
+/* ── Formateador de Fecha a DD/MM/AAAA ── */
+    const formatFechaCL = (fechaString) => {
+      if (!fechaString) return "Sin fecha";
+      const partes = fechaString.split('-');
+      if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
+      return fechaString;
+    };
 
     /* ── Guardar un registro individual en Sheets ── */
     const savePWARecord = async (tipo, record) => {
       try {
         const res = await fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          // ⚠️ TRUCO CORS: text/plain permite que pase sin bloqueo
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'savePWARecord', tipo, record })
         });
         const json = await res.json();
@@ -375,18 +382,21 @@
         const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAll`);
         const json = await res.json();
         if (json.appointments) {
-          return json.appointments.filter(c => c.status === 'Pendiente');
+          // Extraemos las pendientes y les aplicamos el formato de fecha de inmediato
+          return json.appointments
+            .filter(c => c.status === 'Pendiente')
+            .map(c => ({ ...c, date: formatFechaCL(c.date) }));
         }
         return [];
       } catch { return []; }
     };
 
-    /* ── Actualizar estado de cita en Sheets del agendamiento ── */
+    /* ── Actualizar estado de cita en Sheets ── */
     const updateCitaStatus = async (id, status) => {
       try {
         const res = await fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'update', appointment: { id, status } })
         });
         const json = await res.json();
@@ -399,13 +409,13 @@
       try {
         await fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action: 'updatePuntos', clienteId, puntos })
         });
       } catch {}
     };
 
-        const generateId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const generateId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     /* ===========================
        APP
@@ -427,6 +437,28 @@
       const [saving, setSaving] = useState(false);
 
       useEffect(() => { loadData(); loadAgenda(); }, []);
+
+      const loadData = async () => {
+        // ✅ Variable para rastrear la cantidad de citas y lanzar notificaciones
+      const [cantidadCitas, setCantidadCitas] = useState(0);
+
+      useEffect(() => {
+        // 1. Pedir permiso de notificaciones
+        if ("Notification" in window && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+        
+        // 2. Cargar datos iniciales
+        loadData(); 
+        loadAgenda();
+
+        // 3. Revisar la agenda automáticamente cada 1 minuto (60000ms)
+        const interval = setInterval(() => {
+            loadAgenda();
+        }, 60000);
+
+        return () => clearInterval(interval); // Limpiar al salir
+      }, []);
 
       const loadData = async () => {
         setLoading(true);
@@ -465,9 +497,23 @@
       };
 
       // Cargar agenda de citas pendientes
+// Cargar agenda y lanzar notificación si hay citas nuevas
       const loadAgenda = async () => {
         setLoadingAgenda(true);
         const citas = await loadAgendaFromSheets();
+        
+        setCantidadCitas(prev => {
+            if (citas.length > prev && prev !== 0) {
+                if (Notification.permission === "granted") {
+                    new Notification("🐾 ¡Nueva Cita Agendada!", {
+                        body: "Revisa el panel, tienes un nuevo paciente pendiente.",
+                        icon: "icon-192x192.png"
+                    });
+                }
+            }
+            return citas.length;
+        });
+
         setAgenda(citas);
         setLoadingAgenda(false);
       };
@@ -2512,6 +2558,55 @@
        MONTAJE FINAL
        =========================== */
     ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(() => console.log('✅ Service Worker activado y PWA instalable'))
+          .catch(err => console.error('❌ Error SW:', err));
+      });
+    }
+  </script>
+  <script>
+    let deferredPrompt;
+    const installButton = document.getElementById('installButton');
+
+    // 1. Ocultamos el botón al inicio (hasta saber si el teléfono es compatible)
+    if (installButton) {
+        installButton.style.display = 'none';
+    }
+
+    // 2. El navegador avisa que la app se puede instalar
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault(); // Evita que el navegador muestre su propio aviso feo
+      deferredPrompt = e; // Guardamos el evento para usarlo al hacer clic
+      
+      // Mostramos nuestro botón bonito
+      if (installButton) {
+          installButton.style.display = 'flex';
+      }
+    });
+
+    // 3. Qué pasa cuando hacemos clic en el botón
+    if (installButton) {
+        installButton.addEventListener('click', async () => {
+          if (!deferredPrompt) return;
+          
+          deferredPrompt.prompt(); // Muestra el cartel de instalación del teléfono
+          const { outcome } = await deferredPrompt.userChoice;
+          
+          console.log(`El usuario eligió: ${outcome}`);
+          deferredPrompt = null; // Limpiamos la variable
+          installButton.style.display = 'none'; // Ocultamos el botón tras elegir
+        });
+    }
+
+    // 4. Si la app ya está instalada, nos aseguramos de que el botón no aparezca
+    window.addEventListener('appinstalled', () => {
+      if (installButton) installButton.style.display = 'none';
+      console.log('🐾 ¡Manada Patitas fue instalada con éxito!');
+    });
   </script>
 </body>
 </html>
